@@ -1,4 +1,4 @@
-# Tala Vault
+# TALA Vault (Tokenized Asset Ledger Alkansya)
 TALA Vault disrupts the over-saturated pool of generic digital lockboxes by transforming traditional Filipino paluwagan savings circles and remittance streams into programmatically automated, multi-currency collaborative vaults built on Soroban.
 
 ## Problem
