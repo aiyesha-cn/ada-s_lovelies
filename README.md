@@ -11,7 +11,6 @@ Users can create personal or community-driven "smart vaults" to lock away stable
 - Soroban Smart Contracts (Rust): Powers the core collaborative and individual vault parameters. The contracts safely manage multi-user states, cryptographic asset locking, and deposit/withdrawal logic without requiring centralized ledgers.
 - Stellar Asset Contract (SAC): Utilizes native USDC on Stellar out of the box to guarantee hyper-low transaction fees, lightning-fast settlement, and immediate exposure to stable USD values.
 - Stellar Compliance & Anchor Architecture (SEP-24/SEP-6): Keeps the contract layer purely permissionless and No-KYC at entry, while shifting regulatory compliance entirely to the edge. Users interact freely on-chain in USD, but complete standard KYC checks only when interacting with regulated local off-ramps (like PeraHub or Coins.ph) to cash out into physical Philippine Peso (PHP) fiat.
-- Passkey Signer Integration: Enables seamless Web2-style account generation using a phone's built-in biometrics, entirely abstracting away complex seed phrases for non-technical users.
 
 
 ## Track
