@@ -3,11 +3,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   contractConfigured,
   readSavingsState,
-  buildContributeXDR,
   type SavingsState,
 } from '@/lib/contract';
-import { submitSignedXDR, pollTransaction } from '@/lib/payment';
-import { NETWORK_PASSPHRASE } from '@/lib/stellar';
+import {
+  depositUSDC,
+  withdrawUSDC,
+  getTransferState,
+  subscribeToTransferState,
+  resetTransferState,
+} from '@/lib/transfer';
 
 interface DashboardProps {
   publicKey: string | null;
@@ -19,9 +23,11 @@ export default function SavingsDashboard({ publicKey }: DashboardProps) {
   const [phpRate, setPhpRate] = useState<number>(58.60);
   const [loading, setLoading] = useState<boolean>(configured);
   const [depositAmount, setDepositAmount] = useState('');
+  const [withdrawAmount, setWithdrawAmount] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
+  const [transferState, setTransferState] = useState(getTransferState());
 
   const refresh = useCallback(async () => {
     if (!configured) return;
@@ -45,6 +51,12 @@ export default function SavingsDashboard({ publicKey }: DashboardProps) {
   }, [configured, refresh]);
 
   useEffect(() => {
+    return subscribeToTransferState(() => {
+      setTransferState(getTransferState());
+    });
+  }, []);
+
+  useEffect(() => {
     // Fetch live exchange rate
     fetch('https://open.er-api.com/v6/latest/USD')
       .then((res) => res.json())
@@ -62,26 +74,39 @@ export default function SavingsDashboard({ publicKey }: DashboardProps) {
     setError('');
     setMsg('');
     try {
-      const xdr = await buildContributeXDR(publicKey, Number(depositAmount));
-      const freighter = await import('@stellar/freighter-api');
-      const signed = await freighter.signTransaction(xdr, {
-        networkPassphrase: NETWORK_PASSPHRASE,
-        address: publicKey,
+      await depositUSDC(depositAmount, {
+        onCompleted: async () => {
+          setDepositAmount('');
+          await refresh();
+        },
       });
-      if (signed.error) {
-        throw new Error(
-          typeof signed.error === 'string' ? signed.error : 'Signing was rejected',
-        );
-      }
-      const hash = await submitSignedXDR(signed.signedTxXdr);
-      await pollTransaction(hash);
       setMsg('Contribution saved successfully!');
-      setDepositAmount('');
-      await refresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Contribution failed');
     } finally {
       setBusy(false);
+      resetTransferState();
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (!publicKey || !withdrawAmount) return;
+    setBusy(true);
+    setError('');
+    setMsg('');
+    try {
+      await withdrawUSDC(withdrawAmount, {
+        onCompleted: async () => {
+          setWithdrawAmount('');
+          await refresh();
+        },
+      });
+      setMsg('Withdrawal completed successfully!');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Withdrawal failed');
+    } finally {
+      setBusy(false);
+      resetTransferState();
     }
   };
 
@@ -137,20 +162,38 @@ export default function SavingsDashboard({ publicKey }: DashboardProps) {
         </div>
       </div>
 
-      {/* Deposit Input Section */}
+      {/* Deposit / Withdraw Input Section */}
       {publicKey && (
-        <div className="space-y-2">
-          <label className="text-xs text-slate-400 uppercase tracking-wide block font-semibold">
-            Amount to Deposit (USDC)
-          </label>
-          <input
-            type="number"
-            value={depositAmount}
-            onChange={(e) => setDepositAmount(e.target.value)}
-            placeholder="0.00"
-            disabled={busy}
-            className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 disabled:opacity-50"
-          />
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs text-slate-400 uppercase tracking-wide block font-semibold">
+              Amount to Deposit (USDC)
+            </label>
+            <input
+              type="number"
+              value={depositAmount}
+              onChange={(e) => setDepositAmount(e.target.value)}
+              placeholder="0.00"
+              disabled={busy}
+              className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 disabled:opacity-50"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs text-slate-400 uppercase tracking-wide block font-semibold">
+              Amount to Withdraw (USDC)
+            </label>
+            <input
+              type="number"
+              value={withdrawAmount}
+              onChange={(e) => setWithdrawAmount(e.target.value)}
+              placeholder="0.00"
+              disabled={busy}
+              className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 disabled:opacity-50"
+            />
+          </div>
+          {transferState.status !== 'idle' && (
+            <p className="text-xs text-slate-300">{transferState.message}</p>
+          )}
           {error && <p className="text-xs text-red-400">{error}</p>}
           {msg && <p className="text-xs text-green-400">{msg}</p>}
         </div>
@@ -158,12 +201,13 @@ export default function SavingsDashboard({ publicKey }: DashboardProps) {
 
       {/* Action Triggers */}
       <div className="grid grid-cols-2 gap-3 pt-2">
-        <button 
-          disabled={true}
+        <button
+          onClick={handleWithdraw}
+          disabled={!publicKey || !withdrawAmount || busy || loading}
           className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 border border-slate-700 text-sm font-semibold py-3 rounded-xl transition-all active:scale-[0.98]">
-          Withdraw
+          {busy ? 'Processing...' : 'Withdraw'}
         </button>
-        <button 
+        <button
           onClick={handleDeposit}
           disabled={!publicKey || !depositAmount || busy || loading}
           className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm font-semibold py-3 rounded-xl transition-all shadow-lg shadow-blue-600/10 active:scale-[0.98]">

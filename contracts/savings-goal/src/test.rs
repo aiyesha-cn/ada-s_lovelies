@@ -26,6 +26,21 @@ fn init_then_contribute_tracks_total() {
 }
 
 #[test]
+fn withdraw_reduces_saved_balance() {
+    let env = Env::default();
+    let client = setup(&env);
+
+    client.init(&1000);
+    client.contribute(&500);
+
+    let withdrawn = client.withdraw(&200);
+    assert_eq!(withdrawn, 300);
+
+    let state = client.get_state();
+    assert_eq!(state.saved, 300);
+}
+
+#[test]
 fn get_state_before_init_is_zero() {
     let env = Env::default();
     let client = setup(&env);
