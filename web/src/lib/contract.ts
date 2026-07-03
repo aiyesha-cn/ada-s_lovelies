@@ -45,7 +45,7 @@ export async function buildCreateVaultXDR(params: CreateVaultParams): Promise<st
         nativeToScVal(BigInt(Math.trunc(lockUntil)), { type: 'u64' }),
         nativeToScVal(Address.fromString(tokenAddress), { type: 'address' }),
         nativeToScVal(purpose, { type: 'string' }),
-        nativeToScVal({ tag: vaultType, values: undefined }, { type: 'instance' }),
+        nativeToScVal({ tag: vaultType, values: undefined }, { type: 'map' }),
         nativeToScVal(BigInt(Math.trunc(goalAmount)), { type: 'i128' }),
       ),
     )
