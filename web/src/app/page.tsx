@@ -1,6 +1,6 @@
 'use client';
-import { useState, useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+
+import { useState, useCallback } from 'react';
 import { useWallet } from '@/hooks/useWallet';
 import { hasAccount } from '@/lib/auth/storage';
 import ConnectWallet from '@/components/ConnectWallet';
@@ -29,10 +29,10 @@ function SparkleStar({ className = '' }) {
 export default function Home() {
   const router = useRouter();
   const wallet = useWallet();
-  const { publicKey, connecting, status, network, provider, signerAvailable, error, disconnect, initialized } = wallet;
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [authChecked, setAuthChecked] = useState(false);
-  const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+  const { publicKey, connecting } = wallet;
+  const [localRefreshKey, setLocalRefreshKey] = useState(0);
+
+  const refresh = useCallback(() => setLocalRefreshKey((k) => k + 1), []);
 
 // ── Auth gate ──────────────────────────────────────────────
   useEffect(() => {
@@ -77,83 +77,85 @@ export default function Home() {
   if (!authChecked) return null;
 
   return (
-    <main className="min-h-screen w-full bg-[#FAF6F0] text-slate-800 antialiased selection:bg-[#6C5DD3]/10">
-      <div className="mx-auto max-w-md px-4 py-12">
+    <main className="min-h-screen w-full bg-[#FAF8F5] text-slate-800 antialiased selection:bg-[#FF5E00]/10 pb-16">
+      <div className="mx-auto max-w-md px-4 py-8">
         
         {/* Core Header Section */}
-        <header className="mb-6 flex items-start justify-between gap-4 px-1">
+        <header className="mb-6 flex items-center justify-between gap-4 px-1">
           <div>
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-[#6C5DD3] rounded-xl text-white">
-                <SparkleStar className="h-4 w-4" />
+            <div className="flex items-center gap-2.5">
+              {/* Handled Mascot Replacement */}
+              <div className="w-7 h-7 relative shrink-0">
+                <Image 
+                  src="/stellamascot.png"
+                  alt="Stella Mascot"
+                  fill
+                  priority
+                  sizes="28px"
+                  className="object-contain"
+                />
               </div>
-              <h1 className="text-xl font-black text-slate-800 tracking-tight">STELLA Vault</h1>
+              <h1 className="text-xl font-black text-slate-900 tracking-tight">STELLA Vault</h1>
             </div>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1.5">
-              Soroban Engine · Smart Testnet
-            </p>
           </div>
           <ConnectWallet {...wallet} />
         </header>
 
-        {/* Cryptographic Session State Card */}
-        <section className="mb-5 rounded-4xl border border-violet-100/50 bg-white p-5 shadow-xl shadow-indigo-900/5">
-          <div className="flex items-center justify-between gap-2 border-b border-slate-50 pb-3">
-            <div className="flex items-center gap-1.5 text-xs font-black text-slate-700 tracking-tight">
-              <ShieldIcon className="h-4 w-4 text-[#6C5DD3]" />
-              Secure Identity Ledger
+        {/* Empty Wallet State Frame */}
+        {!publicKey && !connecting && (
+          <div className="mb-5 rounded-[2.2rem] border border-orange-100/30 bg-white/60 backdrop-blur-md py-10 px-6 text-center shadow-xs">
+            {/* Mascot Container */}
+            <div className="mx-auto mb-4 w-24 h-24 relative">
+              <Image 
+                src="/stellamascot.png"
+                alt="Stella Mascot"
+                fill
+                priority
+                sizes="96px"
+                className="object-contain"
+              />
             </div>
-            <span className="rounded-full bg-indigo-50/60 border border-indigo-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#5B4FBF]">
-              {status}
-            </span>
+            <p className="text-xs font-black text-slate-800 mb-1.5 uppercase tracking-wide">
+              Authorization Credentials Required
+            </p>
+            <p className="text-[11px] font-semibold text-slate-400 leading-relaxed max-w-xs mx-auto">
+              Connect your Freighter hardware or browser layer extension to configure your profile token variables. 
+              If needed,{' '}
+              <a
+                href="https://freighter.app"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-black text-[#FF5E00] hover:underline"
+              >
+                Install Freighter Extension
+              </a>{' '}
+              and switch the runtime to Test Net mode.
+            </p>
           </div>
-          
-          <div className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
-            <div className="space-y-0.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Public Node Address</span>
-              <p className="font-mono font-bold text-slate-700 break-all">
-                {publicKey ? `${publicKey.slice(0, 12)}…${publicKey.slice(-8)}` : 'Not connected'}
-              </p>
-            </div>
-            <div className="space-y-0.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Active Horizon</span>
-              <p className="font-semibold text-slate-700 capitalize">{network || 'none'}</p>
-            </div>
-            <div className="space-y-0.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Extension Bridge</span>
-              <p className="font-semibold text-slate-700 capitalize">{provider || 'none'}</p>
-            </div>
-            <div className="space-y-0.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Cryptographic Signer</span>
-              <p className={`font-bold ${signerAvailable ? 'text-emerald-600' : 'text-slate-400'}`}>
-                {signerAvailable ? 'Live & Available' : 'Locked'}
-              </p>
-            </div>
-          </div>
-          
-          {error && (
-            <div className="mt-3 rounded-xl bg-rose-50 border border-rose-100 px-3 py-2">
-              <p className="text-[11px] font-bold text-rose-600 leading-normal">{error}</p>
-            </div>
-          )}
-        </section>
+        )}
 
         {/* On-Chain Pipeline Interaction Gate */}
         {publicKey && (
-          <div className="mb-4 flex flex-wrap items-center gap-2.5 px-1">
-            <FundAccount publicKey={publicKey} onFunded={refresh} />
-            <AddTrustline publicKey={publicKey} onDone={refresh} />
+          <div className="mb-5 flex flex-wrap items-center gap-2 px-1">
+            <div className="flex-1 min-w-35">
+              <FundAccount publicKey={publicKey} onFunded={refresh} />
+            </div>
+            <div className="flex-1 min-w-35">
+              <AddTrustline publicKey={publicKey} onDone={refresh} />
+            </div>
           </div>
         )}
 
         {/* Stellar Core Performance Interface */}
-        <SavingsDashboard key={refreshKey} publicKey={publicKey} onLogout={handleLogout} />
+        <div className="mt-2">
+          <SavingsDashboard key={localRefreshKey} wallet={wallet} publicKey={publicKey} />
+        </div>
 
         {/* Hackathon Meta Attributions */}
-        <footer className="mt-12 text-center text-[10px] font-semibold tracking-wide text-slate-400 px-4 leading-relaxed">
+        <footer className="mt-12 text-center text-[10px] font-black tracking-wider text-slate-400 px-4 uppercase leading-relaxed">
           Built by Team Ada&apos;s Lovelies
           <br />
-          <span className="opacity-75 font-normal">One secure vault and one community at a time.</span>
+          <span className="opacity-60 font-medium lowercase tracking-normal">One secure vault and one community at a time.</span>
         </footer>
       </div>
     </main>
