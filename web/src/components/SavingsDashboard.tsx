@@ -160,6 +160,10 @@ function formatAmount(value: number): string {
   return Number.isFinite(value) ? value.toFixed(2) : '0.00';
 }
 
+function formatCurrency(value: number): string {
+  return `$${formatAmount(value)}`;
+}
+
 export default function SavingsDashboard({ publicKey }: DashboardProps) {
   const configured = contractConfigured();
   const [state, setState] = useState<SavingsState | null>(null);
@@ -527,14 +531,14 @@ export default function SavingsDashboard({ publicKey }: DashboardProps) {
                   <h1 className="text-3xl font-black text-slate-300">Loading…</h1>
                 ) : (
                   <h1 className="text-4xl font-black text-slate-800 tracking-tight">
-                    {showBalance ? `$${formatAmount(walletUsdcBalance)}` : '••••••'}
+                    {showBalance ? formatCurrency(walletUsdcBalance) : '••••••'}
                   </h1>
                 )}
                 <p className="text-xs font-semibold text-slate-400 font-mono">
-                  {showBalance ? `Wallet: ${formatAmount(walletUsdcBalance)} USDC • ${formatAmount(walletXlmBalance)} XLM` : 'Wallet hidden'}
+                  {showBalance ? `Wallet: ${formatCurrency(walletUsdcBalance)} USDC • ${formatCurrency(walletXlmBalance)} XLM` : 'Wallet hidden'}
                 </p>
                 <p className="text-xs font-semibold text-slate-400 font-mono">
-                  {showBalance ? `≈ ₱${formatAmount(totalEquivalentInPhp)} PHP` : '≈ ₱••••••'}
+                  {showBalance ? `≈ ${formatCurrency(totalEquivalentInPhp)} PHP` : '≈ ₱••••••'}
                 </p>
                 <div className="inline-flex items-center gap-1.5 mt-2 rounded-full bg-[#E1F7EE] text-[#10B981] px-3 py-1 text-[11px] font-bold">
                   <SparkleStar className="w-3 h-3" />
@@ -641,28 +645,28 @@ export default function SavingsDashboard({ publicKey }: DashboardProps) {
                 <div className="rounded-3xl border border-violet-100 bg-white p-4 shadow-sm">
                   <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Wallet USDC</p>
                   <p className="mt-2 text-2xl font-black text-slate-800">
-                    {walletBalances ? formatAmount(walletUsdcBalance) : '—'}
+                    {walletBalances ? formatCurrency(walletUsdcBalance) : '—'}
                   </p>
                   <p className="mt-1 text-[11px] font-semibold text-slate-400">Available for deposits</p>
                 </div>
                 <div className="rounded-3xl border border-violet-100 bg-white p-4 shadow-sm">
                   <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Vault balance</p>
                   <p className="mt-2 text-2xl font-black text-slate-800">
-                    {vaultSummaryLoading ? '…' : formatAmount(usdcBalance)}
+                    {vaultSummaryLoading ? '…' : formatCurrency(usdcBalance)}
                   </p>
                   <p className="mt-1 text-[11px] font-semibold text-slate-400">Saved in the vault</p>
                 </div>
                 <div className="rounded-3xl border border-violet-100 bg-white p-4 shadow-sm">
                   <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">My contribution</p>
                   <p className="mt-2 text-2xl font-black text-slate-800">
-                    {vaultSummaryLoading ? '…' : formatAmount(safeNumber(vaultSummary?.contribution))}
+                    {vaultSummaryLoading ? '…' : formatCurrency(safeNumber(vaultSummary?.contribution))}
                   </p>
                   <p className="mt-1 text-[11px] font-semibold text-slate-400">Your share so far</p>
                 </div>
                 <div className="rounded-3xl border border-violet-100 bg-white p-4 shadow-sm">
                   <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Withdrawable</p>
                   <p className="mt-2 text-2xl font-black text-slate-800">
-                    {vaultSummaryLoading ? '…' : formatAmount(safeNumber(vaultSummary?.withdrawable))}
+                    {vaultSummaryLoading ? '…' : formatCurrency(safeNumber(vaultSummary?.withdrawable))}
                   </p>
                   <p className="mt-1 text-[11px] font-semibold text-slate-400">Based on lock and goal rules</p>
                 </div>
@@ -682,8 +686,8 @@ export default function SavingsDashboard({ publicKey }: DashboardProps) {
                   <div className="h-full rounded-full bg-linear-to-r from-[#6C5DD3] to-[#8F7CFF]" style={{ width: `${Math.min(100, vaultProgress)}%` }} />
                 </div>
                 <div className="mt-4 flex items-center justify-between text-sm text-slate-600">
-                  <span>Goal: ${formatAmount(vaultGoal)}</span>
-                  <span>Need: ${formatAmount(vaultRemaining)}</span>
+                  <span>Goal: {formatCurrency(vaultGoal)}</span>
+                  <span>Need: {formatCurrency(vaultRemaining)}</span>
                 </div>
                 {vaultSummary && (
                   <p className="mt-3 text-[11px] font-semibold text-slate-400">
