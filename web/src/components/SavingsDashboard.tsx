@@ -1,10 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { fetchBalances, type Balances } from '@/lib/balances';
 import {
   contractConfigured,
   readSavingsState,
+  readVaultBalanceSummary,
+  resolveVaultId,
   type SavingsState,
+  type VaultBalanceSummary,
 } from '@/lib/contract';
 import {
   depositUSDC,
@@ -91,8 +95,11 @@ function NavIcon({ type, active }: { type: Tab; active: boolean }) {
 export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) {
   const configured = contractConfigured();
   const [state, setState] = useState<SavingsState | null>(null);
+  const [walletBalances, setWalletBalances] = useState<Balances | null>(null);
+  const [vaultSummary, setVaultSummary] = useState<VaultBalanceSummary | null>(null);
   const [phpRate, setPhpRate] = useState<number>(58.60);
   const [loading, setLoading] = useState<boolean>(configured);
+  const [vaultSummaryLoading, setVaultSummaryLoading] = useState(false);
   const [showBalance, setShowBalance] = useState(true);
   const [panel, setPanel] = useState<Panel>(null);
   const [activeTab, setActiveTab] = useState<Tab>('home');
@@ -119,12 +126,13 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
     setError('');
     try {
       setState(await readSavingsState());
+      await loadVaultSummary(publicKey);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to read contract');
     } finally {
       setLoading(false);
     }
-  }, [configured]);
+  }, [configured, loadVaultSummary, publicKey]);
 
   const refreshHistory = useCallback(async (address: string | null) => {
     if (!address) {
@@ -133,6 +141,14 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
     }
     setHistory(await loadHistory(address));
   }, []);
+
+  const handleLogout = () => {
+    setPanel(null);
+    setActiveTab('home');
+    setMsg('');
+    setError('');
+    onLogout();
+  };
 
   useEffect(() => {
     if (!configured) return;
@@ -180,6 +196,59 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
       ignore = true;
     };
   }, [publicKey]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const run = async () => {
+      if (!publicKey) {
+        if (!ignore) {
+          setWalletBalances(null);
+        }
+        return;
+      }
+
+      try {
+        const balances = await fetchBalances(publicKey);
+        if (!ignore) {
+          setWalletBalances(balances);
+        }
+      } catch {
+        if (!ignore) {
+          setWalletBalances(null);
+        }
+      }
+    };
+
+    void run();
+
+    return () => {
+      ignore = true;
+    };
+  }, [publicKey]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const run = async () => {
+      if (!publicKey) {
+        if (!ignore) {
+          setVaultSummary(null);
+        }
+        return;
+      }
+
+      if (!ignore) {
+        await loadVaultSummary(publicKey);
+      }
+    };
+
+    void run();
+
+    return () => {
+      ignore = true;
+    };
+  }, [loadVaultSummary, publicKey]);
 
   useEffect(() => {
     return subscribeToTransferState(() => {
@@ -310,8 +379,19 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
     );
   }
 
-  const usdcBalance = state?.saved || 0;
-  const totalEquivalentInPhp = usdcBalance * phpRate;
+  const walletUsdcBalance = safeNumber(walletBalances?.usdc);
+  const walletXlmBalance = safeNumber(walletBalances?.xlm);
+  const stateSaved = safeNumber(state?.saved);
+  const stateTarget = safeNumber(state?.target);
+  const usdcBalance = safeNumber(vaultSummary?.balance ?? stateSaved);
+  const vaultGoal = Math.max(safeNumber(vaultSummary?.goalAmount ?? stateTarget), 1);
+  const vaultProgress = safeNumber(vaultSummary?.progress) > 0
+    ? Math.min(100, safeNumber(vaultSummary?.progress))
+    : (stateTarget > 0 ? Math.min(100, (stateSaved / stateTarget) * 100) : 0);
+  const vaultRemaining = Math.max(vaultGoal - usdcBalance, 0);
+  const totalEquivalentInPhp = walletUsdcBalance * phpRate;
+  const purchasingPowerSaved = walletUsdcBalance * (phpRate * 0.06);
+  const recentPreview = history.slice(0, 3);
 
   return (
     <div className="max-w-md mx-auto min-h-210 bg-[#FAF8F5] rounded-[3.2rem] overflow-hidden shadow-2xl relative flex flex-col justify-between font-sans border border-slate-200/50">

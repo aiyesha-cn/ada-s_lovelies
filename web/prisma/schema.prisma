@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  pubkey    String   @unique
+  username  String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+
+  vaults      Vault[]
+  invitations Invitation[]
+  logs        ActivityLog[]
+  memberships VaultMember[]
+}
+
+model Vault {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  goalType     String
+  targetAmount Float
+  ownerPubkey  String
+  createdAt    DateTime @default(now())
+
+  contractAddress String
+  onChainVaultId   BigInt
+  vaultType        String
+  balance          Float     @default(0)
+  status           String    @default("Active")
+  lockUntil        DateTime?
+
+  owner       User          @relation(fields: [ownerPubkey], references: [pubkey])
+  invitations Invitation[]
+  logs        ActivityLog[]
+  members     VaultMember[]
+
+  @@unique([contractAddress, onChainVaultId])
+}
+
+model VaultMember {
+  id        String   @id @default(cuid())
+  vaultId   String
+  pubkey    String
+  role      String   @default("Contributor") // "Owner" | "Contributor" — mirrors contract's Role enum
+  addedAt   DateTime @default(now())
+
+  vault Vault @relation(fields: [vaultId], references: [id])
+  user  User  @relation(fields: [pubkey], references: [pubkey])
+
+  @@unique([vaultId, pubkey])
+}
+
+model Invitation {
+  id            String   @id @default(cuid())
+  vaultId       String
+  invitedBy     String
+  inviteePubkey String
+  status        String   @default("pending")
+  createdAt     DateTime @default(now())
+
+  vault   Vault @relation(fields: [vaultId], references: [id])
+  inviter User  @relation(fields: [invitedBy], references: [pubkey])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  pubkey    String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  vaultId   String?
+  pubkey    String
+  action    String
+  detail    String?
+  createdAt DateTime @default(now())
+
+  vault Vault? @relation(fields: [vaultId], references: [id])
+  user  User   @relation(fields: [pubkey], references: [pubkey])
+}
+
+model Challenge {
+  pubkey     String   @id
+  challenge  String
+  expiresAt  DateTime
+}

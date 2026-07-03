@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { useWallet } from '@/hooks/useWallet';
+import { hasAccount } from '@/lib/auth/storage';
 import ConnectWallet from '@/components/ConnectWallet';
 import FundAccount from '@/components/FundAccount';
 import AddTrustline from '@/components/AddTrustline';
@@ -9,11 +10,54 @@ import SavingsDashboard from '@/components/SavingsDashboard';
 import Image from 'next/image';
 
 export default function Home() {
+  const router = useRouter();
   const wallet = useWallet();
   const { publicKey, connecting } = wallet;
   const [localRefreshKey, setLocalRefreshKey] = useState(0);
 
   const refresh = useCallback(() => setLocalRefreshKey((k) => k + 1), []);
+
+// ── Auth gate ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!hasAccount()) {
+      router.replace('/register');
+      return;
+    }
+
+    if (wallet.initialized || wallet.status === 'ready') {
+      if (!wallet.publicKey || !wallet.signerAvailable) {
+        router.replace('/login');
+      } else {
+        setAuthChecked(true);
+      }
+      return;
+    }
+
+    // Safety net: if wallet never finishes hydrating within 3s, don't hang forever
+    const timeout = setTimeout(() => {
+      if (!wallet.publicKey || !wallet.signerAvailable) {
+        router.replace('/login');
+      }
+    }, 100);
+
+    return () => clearTimeout(timeout);
+  }, [
+    wallet.initialized,
+    wallet.status,
+    wallet.publicKey,
+    wallet.signerAvailable,
+    router,
+  ]);
+
+  const handleLogout = useCallback(async () => {
+    await disconnect();                              // clears 'stella-vault.wallet'
+    // clearAccount();                                   // clears the PIN-encrypted account
+    // localStorage.removeItem('stella_vault_account');  // clears the auth gate flag
+    router.replace('/login');
+  }, [disconnect, router]);
+
+  // Don't flash the dashboard while checking auth
+  if (!authChecked) return null;
 
   return (
     <main className="min-h-screen w-full bg-[#FAF8F5] text-slate-800 antialiased selection:bg-[#FF5E00]/10 pb-16">
