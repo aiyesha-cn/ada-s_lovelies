@@ -1,5 +1,6 @@
 import "dotenv/config"
 import { prisma } from "@/lib/prisma"
+import { logActivity } from "@/lib/logActivity"
 
 export async function GET() {
   const users = await prisma.user.findMany({
@@ -15,13 +16,14 @@ export async function POST(request: Request) {
     return Response.json({ error: "pubkey is required" }, { status: 400 })
   }
 
-  // Upsert instead of create: safe to call on every successful login,
-  // not just first-time registration. Won't throw on an existing pubkey.
+  // Check existence first so we know whether to log a creation or a login.
+  const existing = await prisma.user.findUnique({
+    where: { pubkey: body.pubkey },
+  })
+
   const user = await prisma.user.upsert({
     where: { pubkey: body.pubkey },
     update: {
-      // Only overwrite these if actually provided, so a plain login
-      // doesn't wipe out a username/avatar set during registration.
       ...(body.username !== undefined && { username: body.username }),
       ...(body.avatarUrl !== undefined && { avatarUrl: body.avatarUrl }),
     },
@@ -32,5 +34,12 @@ export async function POST(request: Request) {
     },
   })
 
-  return Response.json(user, { status: 201 })
+  // Fire-and-forget: logActivity already swallows its own errors internally,
+  // so this never blocks or breaks the response below.
+  void logActivity({
+    pubkey: body.pubkey,
+    action: existing ? "account_login" : "account_created",
+  })
+
+  return Response.json(user, { status: existing ? 200 : 201 })
 }
