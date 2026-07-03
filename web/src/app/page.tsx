@@ -7,7 +7,6 @@ import ConnectWallet from '@/components/ConnectWallet';
 import FundAccount from '@/components/FundAccount';
 import AddTrustline from '@/components/AddTrustline';
 import SavingsDashboard from '@/components/SavingsDashboard';
-import { hasAccount } from '@/lib/auth/storage';
 
 /* ---------- Pure Inline Decorative Icons ---------- */
 function ShieldIcon({ className = '' }) {
