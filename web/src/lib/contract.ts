@@ -15,6 +15,15 @@ import { server, NETWORK_PASSPHRASE, CONTRACT_ID, USDC_ISSUER } from './stellar'
 // account works — we reuse the Circle USDC issuer.
 const READ_SOURCE = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 
+export interface CreateVaultParams {
+  creator: string;
+  purpose: string;
+  vaultType: 'Personal' | 'Collaborative';
+  goalAmount: number;
+  lockUntil?: number; // unix seconds; 0 or omitted = no lock
+  tokenAddress?: string; // Soroban SAC address; defaults to the USDC SAC derived below
+}
+
 export async function buildCreateVaultXDR(params: CreateVaultParams): Promise<string> {
   const { creator, purpose, vaultType, goalAmount, lockUntil = 0 } = params;
 
