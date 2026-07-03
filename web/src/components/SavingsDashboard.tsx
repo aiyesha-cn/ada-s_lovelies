@@ -36,6 +36,7 @@ interface WalletContextProps {
   provider: string;
   signerAvailable: boolean;
   error: string | null;
+  disconnect?: () => void;
 }
 
 interface DashboardProps {
@@ -119,6 +120,31 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
   // Sub-mode selectors for Options (Amount Input vs QR)
   const [sendMode, setSendMode] = useState<'amount' | 'qr'>('amount');
   const [receiveMode, setReceiveMode] = useState<'address' | 'qr'>('address');
+
+  const safeNumber = (v: unknown): number => {
+  const n = Number(v);
+  return isFinite(n) ? n : 0;
+  };
+
+  const onLogout = useCallback(() => {
+    wallet.disconnect?.();
+  }, [wallet]);
+
+  const loadVaultSummary = useCallback(async (key: string | null) => {
+    if (!key) {
+      setVaultSummary(null);
+      return;
+    }
+    setVaultSummaryLoading(true);
+    try {
+      const summary = await readVaultBalanceSummary(key);
+      setVaultSummary(summary);
+    } catch {
+      setVaultSummary(null);
+    } finally {
+      setVaultSummaryLoading(false);
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!configured) return;

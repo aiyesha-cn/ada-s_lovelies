@@ -105,7 +105,7 @@ export default function Home() {
               Connect your Freighter hardware or browser layer extension to configure your profile token variables.
               If needed,{' '}
               
-                href="https://freighter.app"
+                <a href="https://freighter.app"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-black text-[#FF5E00] hover:underline"
