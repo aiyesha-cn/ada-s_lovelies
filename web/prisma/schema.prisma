@@ -16,6 +16,7 @@ model User {
   vaults      Vault[]
   invitations Invitation[]
   logs        ActivityLog[]
+  memberships VaultMember[]
 }
 
 model Vault {
@@ -27,20 +28,32 @@ model Vault {
   ownerPubkey  String
   createdAt    DateTime @default(now())
 
-  // --- On-chain fields (added to match the Soroban contract) ---
-  contractAddress String    // the single deployed VaultContract's address (shared across many vaults)
-  onChainVaultId   BigInt    // the u64 vault_id returned by the contract's create_vault call
-  vaultType        String    // "Personal" | "Collaborative" — mirrors the contract's VaultType enum
-  balance          Float     @default(0)         // mirrors the contract's on-chain balance
-  status           String    @default("Active")  // "Active" | "GoalReached" | "Closed"
-  lockUntil        DateTime? // null = no lock, matches contract's lock_until of 0
+  contractAddress String
+  onChainVaultId   BigInt
+  vaultType        String
+  balance          Float     @default(0)
+  status           String    @default("Active")
+  lockUntil        DateTime?
 
   owner       User          @relation(fields: [ownerPubkey], references: [pubkey])
   invitations Invitation[]
   logs        ActivityLog[]
+  members     VaultMember[]
 
-  // A given contract can only have one vault with a given on-chain ID
   @@unique([contractAddress, onChainVaultId])
+}
+
+model VaultMember {
+  id        String   @id @default(cuid())
+  vaultId   String
+  pubkey    String
+  role      String   @default("Contributor") // "Owner" | "Contributor" — mirrors contract's Role enum
+  addedAt   DateTime @default(now())
+
+  vault Vault @relation(fields: [vaultId], references: [id])
+  user  User  @relation(fields: [pubkey], references: [pubkey])
+
+  @@unique([vaultId, pubkey])
 }
 
 model Invitation {
