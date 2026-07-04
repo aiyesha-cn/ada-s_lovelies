@@ -28,6 +28,7 @@ import Wheel from './Wheel';
 import History from './History';
 import Profile from './Profile';
 import CreateVault from './vault/CreateVault';
+import { loadProfile, loadTrustScore, type UserProfile, type TrustScore } from '@/lib/auth/verification';
 
 interface WalletContextProps {
   publicKey: string | null;
