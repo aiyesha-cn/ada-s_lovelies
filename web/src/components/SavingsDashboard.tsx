@@ -692,6 +692,8 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
           />
         )}
 
+      </div>
+
       {/* Mockup Fixed Floating Dock Menu */}
       <div className="absolute bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-slate-200/60 px-3 pt-4 pb-8 flex justify-between items-center rounded-t-[2.4rem] shadow-xl shadow-slate-900/10 z-40">
         {(['home', 'activity', 'profile'] as Tab[]).map((tab) => {
