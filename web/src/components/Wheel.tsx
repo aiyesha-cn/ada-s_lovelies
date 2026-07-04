@@ -137,63 +137,77 @@ export default function Wheel({ activeTab, panel, setActiveTab, setPanel }: Whee
         style={{ touchAction: 'none' }}
       >
         {/* Rotatable Node Wheel Frame */}
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{ transform: `rotate(${currentRotation}deg)`, transition: transitionStyle }}
-        >
-          {/* 1. DEPOSIT — top (0°) */}
-          <div className="absolute top-[4%] left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-            <div className={`flex items-center justify-center rounded-full transition-[background-color,box-shadow,transform] duration-200 ${isDeposit ? activeClasses : inactiveClasses}`} style={nodeStyle(currentRotation)}>
+      <div
+        className="absolute inset-0 rounded-full"
+        style={{ transform: `rotate(${currentRotation}deg)`, transition: transitionStyle }}
+      >
+        {SLOTS.map((slot, i) => {
+          const angleDeg = (i * 72) - 90; // start from top, 72° apart
+          const angleRad = (angleDeg * Math.PI) / 180;
+          const radius = 42; // percentage from center
+          const x = 50 + radius * Math.cos(angleRad);
+          const y = 50 + radius * Math.sin(angleRad);
+
+          const isActive = activeTab === slot.tab && panel === slot.panel;
+          const icons: Record<string, React.ReactNode> = {
+            deposit: (
               <svg className="w-6 h-6 stroke-current" fill="none" strokeWidth="2.5" viewBox="0 0 24 24">
-                <line x1="12" y1="4" x2="12" y2="20"></line>
-                <polyline points="18 14 12 20 6 14"></polyline>
+                <line x1="12" y1="4" x2="12" y2="20"/><polyline points="18 14 12 20 6 14"/>
               </svg>
-            </div>
-          </div>
-
-          {/* 2. WITHDRAW — upper right (72°) */}
-          <div className="absolute z-10 pointer-events-none" style={{ top: '14%', right: '7%' }}>
-            <div className={`flex items-center justify-center rounded-full transition-[background-color,box-shadow,transform] duration-200 ${isWithdraw ? activeClasses : inactiveClasses}`} style={nodeStyle(currentRotation)}>
+            ),
+            withdraw: (
               <svg className="w-6 h-6 stroke-current" fill="none" strokeWidth="2.5" viewBox="0 0 24 24">
-                <line x1="12" y1="20" x2="12" y2="4"></line>
-                <polyline points="6 10 12 4 18 10"></polyline>
+                <line x1="12" y1="20" x2="12" y2="4"/><polyline points="6 10 12 4 18 10"/>
               </svg>
-            </div>
-          </div>
-
-          {/* 3. SEND — lower right (144°) */}
-          <div className="absolute z-10 pointer-events-none" style={{ bottom: '14%', right: '7%' }}>
-            <div className={`flex items-center justify-center rounded-full transition-[background-color,box-shadow,transform] duration-200 ${isSend ? activeClasses : inactiveClasses}`} style={nodeStyle(currentRotation)}>
-              <svg className="w-5 h-5 stroke-current transform rotate-[-15deg] -translate-x-px translate-y-px" fill="none" strokeWidth="2.5" viewBox="0 0 24 24">
-                <line x1="22" y1="2" x2="11" y2="13"></line>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-              </svg>
-            </div>
-          </div>
-
-          {/* 4. CREATE — bottom (216°) */}
-          <div className="absolute bottom-[4%] left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-            <div className={`flex items-center justify-center rounded-full transition-[background-color,box-shadow,transform] duration-200 ${isCreate ? activeClasses : inactiveClasses}`} style={nodeStyle(currentRotation)}>
-              <svg className="w-6 h-6 stroke-current" fill="none" strokeWidth="2.5" viewBox="0 0 24 24">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-            </div>
-          </div>
-
-          {/* 5. RECEIVE — lower left (288°) */}
-          <div className="absolute z-10 pointer-events-none" style={{ bottom: '14%', left: '7%' }}>
-            <div className={`flex items-center justify-center rounded-full transition-[background-color,box-shadow,transform] duration-200 ${isReceive ? activeClasses : inactiveClasses}`} style={nodeStyle(currentRotation)}>
+            ),
+            send: (
               <svg className="w-5 h-5 stroke-current" fill="none" strokeWidth="2.5" viewBox="0 0 24 24">
-                <rect x="3" y="3" width="6" height="6" rx="0.5"></rect>
-                <rect x="15" y="3" width="6" height="6" rx="0.5"></rect>
-                <rect x="15" y="15" width="6" height="6" rx="0.5"></rect>
-                <rect x="3" y="15" width="6" height="6" rx="0.5"></rect>
-                <path d="M9 9h2v2H9V9zM13 13h2v2h-2v-2z"></path>
+                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
               </svg>
+            ),
+            create: (
+              <svg className="w-6 h-6 stroke-current" fill="none" strokeWidth="2.5" viewBox="0 0 24 24">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            ),
+            receive: (
+              <svg className="w-5 h-5 stroke-current" fill="none" strokeWidth="2.5" viewBox="0 0 24 24">
+                <rect x="3" y="3" width="6" height="6" rx="0.5"/>
+                <rect x="15" y="3" width="6" height="6" rx="0.5"/>
+                <rect x="15" y="15" width="6" height="6" rx="0.5"/>
+                <rect x="3" y="15" width="6" height="6" rx="0.5"/>
+                <path d="M9 9h2v2H9V9zM13 13h2v2h-2v-2z"/>
+              </svg>
+            ),
+          };
+
+          return (
+            <div
+              key={slot.panel}
+              className="absolute z-10 pointer-events-none"
+              style={{
+                left: `${x}%`,
+                top: `${y}%`,
+                transform: 'translate(-50%, -50%)',
+              }}
+            >
+              <div
+                className={`flex items-center justify-center rounded-full transition-[background-color,box-shadow] duration-200 w-13 h-13 ${
+                  isActive
+                    ? 'bg-[#9AFAFA] text-[#0F4F53] shadow-lg shadow-cyan-300/20 ring-[5px] ring-cyan-200/80'
+                    : 'bg-[#FF5E00] text-white'
+                }`}
+                style={{
+                  transform: `rotate(${-currentRotation}deg)`,
+                  transition: isDragging ? 'none' : 'transform 0.65s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                }}
+              >
+                {icons[slot.panel ?? '']}
+              </div>
             </div>
-          </div>
-        </div>
+          );
+        })}
+      </div>
 
         {/* Central Stationary Core Hub */}
         <div className="w-34 h-34 rounded-full bg-[#FFFBF7] flex items-center justify-center z-20 shadow-md border-2 border-[#F3EFE9] relative pointer-events-none overflow-hidden">
