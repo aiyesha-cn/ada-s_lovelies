@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { fetchBalances, type Balances } from '@/lib/balances';
+import { walletService } from '@/lib/wallet';
 import {
   contractConfigured,
   readSavingsState,
@@ -104,6 +105,8 @@ function NavIcon({ type, active }: { type: Tab; active: boolean }) {
   );
 }
 
+  const SESSION_KEY_MISSING_MESSAGE = 'Your session key is unavailable. Please unlock your account again.';
+
 export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) {
   const configured = contractConfigured();
 
@@ -134,6 +137,11 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
   // Sub-mode selectors for Options (Amount Input vs QR)
   const [sendMode, setSendMode] = useState<'amount' | 'qr'>('amount');
   const [receiveMode, setReceiveMode] = useState<'address' | 'qr'>('address');
+  const [needsPin, setNeedsPin] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
+  const [pendingRetry, setPendingRetry] = useState<(() => Promise<void>) | null>(null);
 
   const safeNumber = (v: unknown): number => {
   const n = Number(v);
@@ -240,14 +248,53 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
       // ignore
     }
   };
+  /**
+   * Runs a money-moving action. If it fails specifically because the
+   * in-memory session key is missing (e.g. after a page reload), shows an
+   * inline PIN prompt and remembers the action so it can retry automatically
+   * once the user unlocks again — instead of a dead-end error.
+   */
+  const runWithReauth = async (action: () => Promise<void>) => {
+    try {
+      await action();
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Action failed';
+      if (message === SESSION_KEY_MISSING_MESSAGE) {
+        setPendingRetry(() => action);
+        setNeedsPin(true);
+        return;
+      }
+      throw e; // let the caller's existing catch block handle any other error
+    }
+  };
+
+  const handleUnlockAndRetry = async () => {
+    setUnlocking(true);
+    setPinError('');
+    try {
+      await walletService.unlockPinAccount(pinInput);
+      setNeedsPin(false);
+      setPinInput('');
+      if (pendingRetry) {
+        await pendingRetry();
+        setPendingRetry(null);
+      }
+    } catch (e: unknown) {
+      setPinError(e instanceof Error ? e.message : 'Incorrect PIN');
+    } finally {
+      setUnlocking(false);
+    }
+  };
 
   const handleDeposit = async () => {
     if (!publicKey || !depositAmount || Number(depositAmount) <= 0) return;
     setBusy(true); setError(''); setMsg('');
     try {
-      await depositUSDC(depositAmount, { onCompleted: async () => { await refresh(); await refreshHistory(publicKey); } });
-      setMsg('Contribution saved successfully!');
-      setPanel(null);
+      await runWithReauth(async () => {
+        await depositUSDC(depositAmount, { onCompleted: async () => { await refresh(); await refreshHistory(publicKey); } });
+        setMsg('Contribution saved successfully!');
+        setPanel(null);
+      });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Contribution failed');
     } finally {
@@ -260,9 +307,11 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
     if (!publicKey || !withdrawAmount || Number(withdrawAmount) <= 0) return;
     setBusy(true); setError(''); setMsg('');
     try {
-      await withdrawUSDC(withdrawAmount, { onCompleted: async () => { await refresh(); await refreshHistory(publicKey); } });
-      setMsg('Withdrawal completed successfully!');
-      setPanel(null);
+      await runWithReauth(async () => {
+        await withdrawUSDC(withdrawAmount, { onCompleted: async () => { await refresh(); await refreshHistory(publicKey); } });
+        setMsg('Withdrawal completed successfully!');
+        setPanel(null);
+      });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Withdrawal failed');
     } finally {
@@ -299,14 +348,16 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
     if (!pendingApproval || !publicKey || pendingApproval.sender !== publicKey || !pendingApproval.senderAuthorized || !pendingApproval.receiverAuthorized) return;
     setBusy(true); setError(''); setMsg('');
     try {
-      await transferUSDC(pendingApproval.recipient, pendingApproval.amount, {
-        onCompleted: async () => {
-          setRecipient(''); setTransferAmount('');
-          removePendingTransferApproval(pendingApproval.id);
-          await refreshHistory(publicKey);
-        },
+      await runWithReauth(async () => {
+        await transferUSDC(pendingApproval.recipient, pendingApproval.amount, {
+          onCompleted: async () => {
+            setRecipient(''); setTransferAmount('');
+            removePendingTransferApproval(pendingApproval.id);
+            await refreshHistory(publicKey);
+          },
+        });
+        setMsg('USDC transfer completed successfully!');
       });
-      setMsg('USDC transfer completed successfully!');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Transfer failed');
     } finally {
@@ -420,6 +471,40 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
                     {error && <p className="text-xs font-bold text-rose-500">{error}</p>}
                     {msg && <p className="flex items-center gap-1 text-xs font-bold text-emerald-600"><SparkleStar className="w-3 h-3" />{msg}</p>}
                     {transferState.status !== 'idle' && <p className="text-xs font-medium text-slate-400 font-mono">{transferState.message}</p>}
+                  </div>
+                )}
+
+                {needsPin && (
+                  <div className="rounded-xl border border-orange-100 bg-orange-50/60 p-4 space-y-3">
+                    <p className="text-xs font-bold text-slate-700">
+                      Your session timed out. Enter your PIN to continue.
+                    </p>
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      value={pinInput}
+                      onChange={(e) => setPinInput(e.target.value)}
+                      placeholder="Enter PIN"
+                      disabled={unlocking}
+                      className="w-full rounded-xl bg-white border border-slate-200 px-3.5 py-2.5 text-sm text-slate-700 outline-none focus:border-orange-300 disabled:opacity-50"
+                    />
+                    {pinError && <p className="text-[11px] font-bold text-rose-600">{pinError}</p>}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleUnlockAndRetry}
+                        disabled={unlocking || !pinInput}
+                        className="flex-1 rounded-xl bg-[#FF5E00] py-2.5 text-xs font-bold text-white disabled:opacity-40"
+                      >
+                        {unlocking ? 'Unlocking…' : 'Unlock & Continue'}
+                      </button>
+                      <button
+                        onClick={() => { setNeedsPin(false); setPinInput(''); setPinError(''); setPendingRetry(null); }}
+                        disabled={unlocking}
+                        className="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-bold text-slate-600 disabled:opacity-40"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -670,6 +755,7 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
                       setPanel(null);
                       setMsg('Vault created successfully!');
                       void refresh();
+                      setTimeout(() => setMsg(''), 3000);
                     }}
                   />
                 )}
