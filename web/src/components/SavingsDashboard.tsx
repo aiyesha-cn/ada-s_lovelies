@@ -27,6 +27,7 @@ import { loadHistory, type HistoryEntry } from '@/lib/history';
 import Wheel from './Wheel';
 import History from './History';
 import Profile from './Profile';
+import Vaults from './Vaults';
 import CreateVault from './vault/CreateVault';
 import { loadProfile, loadTrustScore, type UserProfile, type TrustScore } from '@/lib/auth/verification';
 
@@ -47,7 +48,7 @@ interface DashboardProps {
 }
 
 type Panel = 'deposit' | 'withdraw' | 'receive' | 'send' | 'create' | null;
-type Tab = 'home' | 'activity' | 'profile';
+type Tab = 'home' | 'activity' | 'vaults' | 'profile';
 
 /* ---------- SVG Icon Toolkit ---------- */
 
@@ -84,6 +85,14 @@ function NavIcon({ type, active }: { type: Tab; active: boolean }) {
       <svg className="w-6 h-6" fill="none" stroke={color} strokeWidth="2.2" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="10"></circle>
         <polyline points="12 6 12 12 16 14"></polyline>
+      </svg>
+    );
+  }
+  if (type === 'vaults') {
+    return (
+      <svg className="w-6 h-6" fill="none" stroke={color} strokeWidth="2.2" viewBox="0 0 24 24">
+        <rect x="3" y="7" width="18" height="13" rx="2"></rect>
+        <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
       </svg>
     );
   }
@@ -691,6 +700,10 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
             onRefresh={refresh}
             onLogout={onLogout}
           />
+        )}
+        {/* === VAULT VIEW PANEL === */}
+        {activeTab === 'vaults' && (
+          <Vaults publicKey={publicKey} loading={loading} />
         )}
 
       </div>
