@@ -559,27 +559,20 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
                         </div>
 
                         <button 
-                          onClick={() => setWithdrawAmount(Math.floor(usdcBalance).toString())}
-                          className="px-2 py-1 text-[10px] font-black tracking-wide text-[#FF5E00] bg-orange-50 rounded-md uppercase"
+                          onClick={handleDeposit} 
+                          disabled={busy || loading || !depositAmount || Number(depositAmount) <= 0} 
+                          className="w-full py-3 rounded-xl bg-[#ff5c00] text-white text-xs font-black tracking-widest uppercase hover:bg-[#a73a00] transition-all disabled:opacity-40 active:scale-[0.98] flex items-center justify-center gap-2"
                         >
-                          Max
+                          {busy && (
+                            <svg className="animate-spin h-3 w-3 text-white" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                          )}
+                          <span>{busy ? 'Processing Transaction…' : 'Deposit'}</span>
                         </button>
                       </div>
-                    </div>
-
-                    {/* LIVE VISIBLE PHP EQUIVALENT ESTIMATE BOX */}
-                    <div className="bg-orange-50/50 border border-orange-100/50 rounded-xl px-4 py-2.5 flex justify-between items-center">
-                      <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Estimated Value</span>
-                      <span className="text-sm font-black text-[#FF5E00]">
-                        ₱{((Number(withdrawAmount) || 0) * phpRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} PHP
-                      </span>
-                    </div>
-
-                    <button onClick={handleWithdraw} disabled={busy || loading || !withdrawAmount || Number(withdrawAmount) <= 0} className="w-full py-3.5 mt-1 rounded-2xl bg-[#FF5E00] text-white text-xs font-black tracking-wider uppercase active:scale-[0.99] transition-transform disabled:opacity-40 shadow-md shadow-orange-500/10">
-                      {busy ? 'Processing Transaction…' : 'Execute Withdrawal'}
-                    </button>
-                  </div>
-                )}
+                    )}
 
                     {/* SUB-FLOW B: RECEIVE PROTOCOL */}
                     {panel === 'receive' && publicKey && (
