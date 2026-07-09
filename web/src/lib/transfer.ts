@@ -2,7 +2,7 @@ import { StrKey } from '@stellar/stellar-sdk';
 import { fetchBalances } from './balances';
 import { buildContributeXDR, buildWithdrawXDR } from './contract';
 import { buildPaymentXDR, pollTransaction, submitSignedXDR } from './payment';
-import { walletService, signWithCurrentAccount } from './wallet';
+import { walletService, signWithCurrentAccount, authFetch } from './wallet';
 import { recordHistoryEntry } from './history';
 
 export type TransferOperation = 'deposit' | 'withdraw' | 'transfer';
@@ -62,91 +62,6 @@ const defaultState: TransferState = {
 
 let currentState: TransferState = { ...defaultState };
 const listeners = new Set<() => void>();
-const pendingTransferStorageKey = 'stella-vault.pending-transfer-approvals';
-
-function readPendingTransfersFromStorage(): PendingTransferApproval[] {
-  if (typeof window === 'undefined') {
-    return [];
-  }
-
-  try {
-    const raw = window.localStorage.getItem(pendingTransferStorageKey);
-    if (!raw) {
-      return [];
-    }
-
-    const parsed = JSON.parse(raw) as PendingTransferApproval[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function writePendingTransfersToStorage(transfers: PendingTransferApproval[]) {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.localStorage.setItem(pendingTransferStorageKey, JSON.stringify(transfers));
-}
-
-export function createPendingTransferApproval(sender: string, recipient: string, amount: number): PendingTransferApproval {
-  const transfer: PendingTransferApproval = {
-    id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
-    sender,
-    recipient,
-    amount,
-    senderAuthorized: false,
-    receiverAuthorized: false,
-    status: 'awaiting_authorization',
-    createdAt: new Date().toISOString(),
-  };
-
-  const next = [transfer, ...readPendingTransfersFromStorage()];
-  writePendingTransfersToStorage(next);
-  return transfer;
-}
-
-export function getPendingTransferApprovalsForAddress(address: string): PendingTransferApproval[] {
-  return readPendingTransfersFromStorage().filter((transfer) => {
-    return transfer.sender === address || transfer.recipient === address;
-  });
-}
-
-export function getPendingTransferApproval(id: string): PendingTransferApproval | null {
-  return readPendingTransfersFromStorage().find((transfer) => transfer.id === id) ?? null;
-}
-
-export function updatePendingTransferApproval(id: string, patch: Partial<PendingTransferApproval>): PendingTransferApproval | null {
-  const transfers = readPendingTransfersFromStorage();
-  const index = transfers.findIndex((transfer) => transfer.id === id);
-  if (index === -1) {
-    return null;
-  }
-
-  const updated = {
-    ...transfers[index],
-    ...patch,
-    status: patch.senderAuthorized || patch.receiverAuthorized
-      ? ((patch.senderAuthorized === true && patch.receiverAuthorized === true) || (transfers[index].senderAuthorized && transfers[index].receiverAuthorized))
-        ? 'ready_to_submit'
-        : 'awaiting_authorization'
-      : transfers[index].status,
-  };
-
-  if (updated.senderAuthorized && updated.receiverAuthorized) {
-    updated.status = 'ready_to_submit';
-  }
-
-  transfers[index] = updated;
-  writePendingTransfersToStorage(transfers);
-  return updated;
-}
-
-export function removePendingTransferApproval(id: string) {
-  const transfers = readPendingTransfersFromStorage().filter((transfer) => transfer.id !== id);
-  writePendingTransfersToStorage(transfers);
-}
 
 function emit() {
   listeners.forEach((listener) => listener());
@@ -340,4 +255,73 @@ export function subscribeToTransferState(listener: () => void) {
 export function resetTransferState() {
   currentState = { ...defaultState };
   emit();
+}
+
+/* ---------------------------------------------------------------------- */
+/* Pending transfer approvals — now backend-backed via /api/transfers,    */
+/* not localStorage. Sender/receiver identity is derived server-side from */
+/* the auth token, not trusted from the client.                          */
+/* ---------------------------------------------------------------------- */
+
+export async function createPendingTransferApproval(
+  recipientPubkey: string,
+  amount: number,
+): Promise<PendingTransferApproval> {
+  const res = await authFetch('/api/transfers', {
+    method: 'POST',
+    body: JSON.stringify({ recipientPubkey, amount }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data?.error ?? 'Failed to create transfer request.');
+  }
+  return normalizeTransfer(data);
+}
+
+export async function getPendingTransferApprovalsForAddress(): Promise<PendingTransferApproval[]> {
+  const res = await authFetch('/api/transfers');
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data?.error ?? 'Failed to load transfer requests.');
+  }
+  return (data.transfers ?? []).map(normalizeTransfer);
+}
+
+export async function updatePendingTransferApproval(id: string): Promise<PendingTransferApproval> {
+  const res = await authFetch(`/api/transfers/${id}`, { method: 'PATCH' });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data?.error ?? 'Failed to update transfer request.');
+  }
+  return normalizeTransfer(data);
+}
+
+export async function removePendingTransferApproval(id: string): Promise<void> {
+  const res = await authFetch(`/api/transfers/${id}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data?.error ?? 'Failed to cancel transfer request.');
+  }
+}
+
+function normalizeTransfer(raw: {
+  id: string;
+  senderPubkey: string;
+  recipientPubkey: string;
+  amount: number;
+  senderAuthorized: boolean;
+  receiverAuthorized: boolean;
+  status: string;
+  createdAt: string;
+}): PendingTransferApproval {
+  return {
+    id: raw.id,
+    sender: raw.senderPubkey,
+    recipient: raw.recipientPubkey,
+    amount: raw.amount,
+    senderAuthorized: raw.senderAuthorized,
+    receiverAuthorized: raw.receiverAuthorized,
+    status: raw.status as PendingTransferApproval['status'],
+    createdAt: raw.createdAt,
+  };
 }

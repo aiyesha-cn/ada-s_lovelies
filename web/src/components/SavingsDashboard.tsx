@@ -143,6 +143,11 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
   const [unlocking, setUnlocking] = useState(false);
   const [pendingRetry, setPendingRetry] = useState<(() => Promise<void>) | null>(null);
 
+  // Pending transfer approval — now backend-backed, fetched async instead of
+  // read synchronously from localStorage.
+  const [pendingApproval, setPendingApproval] = useState<PendingTransferApproval | null>(null);
+  const [pendingLoading, setPendingLoading] = useState(false);
+
   const safeNumber = (v: unknown): number => {
     const n = Number(v);
     return isFinite(n) ? n : 0;
@@ -187,6 +192,22 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
     setHistory(await loadHistory(address));
   }, []);
 
+  const refreshPendingApproval = useCallback(async () => {
+    if (!publicKey) {
+      setPendingApproval(null);
+      return;
+    }
+    setPendingLoading(true);
+    try {
+      const transfers = await getPendingTransferApprovalsForAddress();
+      setPendingApproval(transfers[0] ?? null);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load transfer requests');
+    } finally {
+      setPendingLoading(false);
+    }
+  }, [publicKey]);
+
   useEffect(() => {
     setProfile(loadProfile());
     setTrust(loadTrustScore());
@@ -228,6 +249,10 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
   }, [loadVaultSummary, publicKey]);
 
   useEffect(() => subscribeToTransferState(() => setTransferState(getTransferState())), []);
+
+  useEffect(() => {
+    void refreshPendingApproval();
+  }, [refreshPendingApproval]);
 
   useEffect(() => {
     fetch('https://open.er-api.com/v6/latest/USD')
@@ -313,28 +338,46 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
     setError('Cashing out is coming soon. Your funds stay safely in your wallet for now.');
   };
 
-  const handleTransferRequest = () => {
+  const handleTransferRequest = async () => {
     if (!publicKey || !recipient || !transferAmount) return;
-    createPendingTransferApproval(publicKey, recipient, Number(transferAmount));
-    setMsg('Transfer request created. The receiver must approve it before it can be sent.');
-    setError('');
+    setBusy(true); setError(''); setMsg('');
+    try {
+      await createPendingTransferApproval(recipient, Number(transferAmount));
+      setMsg('Transfer request created. The receiver must approve it before it can be sent.');
+      await refreshPendingApproval();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to create transfer request');
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const pendingApproval = useMemo<PendingTransferApproval | null>(() => {
-    if (!publicKey) return null;
-    return getPendingTransferApprovalsForAddress(publicKey).find((item) => item.status !== 'submitted') ?? null;
-  }, [publicKey]);
-
-  const handleApproveAsSender = () => {
+  const handleApproveAsSender = async () => {
     if (!pendingApproval || !publicKey || pendingApproval.sender !== publicKey) return;
-    if (updatePendingTransferApproval(pendingApproval.id, { senderAuthorized: true }))
+    setBusy(true); setError('');
+    try {
+      await updatePendingTransferApproval(pendingApproval.id);
       setMsg('Sender approval recorded. Waiting for receiver approval.');
+      await refreshPendingApproval();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to approve transfer');
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const handleApproveAsReceiver = () => {
+  const handleApproveAsReceiver = async () => {
     if (!pendingApproval || !publicKey || pendingApproval.recipient !== publicKey) return;
-    if (updatePendingTransferApproval(pendingApproval.id, { receiverAuthorized: true }))
+    setBusy(true); setError('');
+    try {
+      await updatePendingTransferApproval(pendingApproval.id);
       setMsg('Receiver approval recorded. The sender can now submit the transfer.');
+      await refreshPendingApproval();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to approve transfer');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleSubmitApprovedTransfer = async () => {
@@ -345,8 +388,9 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
         await transferUSDC(pendingApproval.recipient, pendingApproval.amount, {
           onCompleted: async () => {
             setRecipient(''); setTransferAmount('');
-            removePendingTransferApproval(pendingApproval.id);
+            await removePendingTransferApproval(pendingApproval.id);
             await refreshHistory(publicKey);
+            await refreshPendingApproval();
           },
         });
         setMsg('USDC transfer completed successfully!');
@@ -676,10 +720,10 @@ return (
                                 <button 
                                   type="button"
                                   onClick={handleTransferRequest}
-                                  disabled={!recipient || !transferAmount || Number(transferAmount) <= 0}
+                                  disabled={busy || !recipient || !transferAmount || Number(transferAmount) <= 0}
                                   className="w-full py-3 rounded-xl bg-linear-to-r from-[#FF9F1C] to-[#F37A00] text-white text-[10px] uppercase tracking-widest hover:opacity-95 transition-opacity disabled:opacity-40"
                                 >
-                                  Request
+                                  {busy ? 'Sending Request…' : 'Request'}
                                 </button>
                               </div>
                             )}
@@ -706,24 +750,36 @@ return (
 
                                 <div className="flex gap-2 pt-1">
                                   {pendingApproval.sender === publicKey && !pendingApproval.senderAuthorized && (
-                                    <button type="button" onClick={handleApproveAsSender} className="flex-1 py-2.5 rounded-xl bg-linear-to-r from-[#FF9F1C] to-[#F37A00] text-white text-[10px] uppercase tracking-wider">
+                                    <button type="button" onClick={handleApproveAsSender} disabled={busy} className="flex-1 py-2.5 rounded-xl bg-linear-to-r from-[#FF9F1C] to-[#F37A00] text-white text-[10px] uppercase tracking-wider disabled:opacity-50">
                                       Sign Sender
                                     </button>
                                   )}
                                   {pendingApproval.recipient === publicKey && !pendingApproval.receiverAuthorized && (
-                                    <button type="button" onClick={handleApproveAsReceiver} className="flex-1 py-2.5 rounded-xl bg-linear-to-r from-[#FF9F1C] to-[#F37A00] text-white text-[10px] uppercase tracking-wider">
+                                    <button type="button" onClick={handleApproveAsReceiver} disabled={busy} className="flex-1 py-2.5 rounded-xl bg-linear-to-r from-[#FF9F1C] to-[#F37A00] text-white text-[10px] uppercase tracking-wider disabled:opacity-50">
                                       Sign Receiver
                                     </button>
                                   )}
                                   {pendingApproval.sender === publicKey && pendingApproval.senderAuthorized && pendingApproval.receiverAuthorized && (
-                                    <button type="button" onClick={handleSubmitApprovedTransfer} disabled={busy} className="flex-1 py-2.5 rounded-xl bg-linear-to-r from-[#FF9F1C] to-[#F37A00] text-white text-[10px] uppercase tracking-widest font-normal">
+                                    <button type="button" onClick={handleSubmitApprovedTransfer} disabled={busy} className="flex-1 py-2.5 rounded-xl bg-linear-to-r from-[#FF9F1C] to-[#F37A00] text-white text-[10px] uppercase tracking-widest font-normal disabled:opacity-50">
                                       {busy ? 'Processing…' : 'Submit Payload'}
                                     </button>
                                   )}
                                   <button 
                                     type="button" 
-                                    onClick={() => { removePendingTransferApproval(pendingApproval.id); setError(''); setMsg(''); }}
-                                    className="px-3 py-2.5 rounded-xl bg-slate-100 text-slate-400 text-[10px] uppercase tracking-wide"
+                                    disabled={busy}
+                                    onClick={async () => {
+                                      setBusy(true);
+                                      try {
+                                        await removePendingTransferApproval(pendingApproval.id);
+                                        setError(''); setMsg('');
+                                        await refreshPendingApproval();
+                                      } catch (e: unknown) {
+                                        setError(e instanceof Error ? e.message : 'Failed to cancel transfer request');
+                                      } finally {
+                                        setBusy(false);
+                                      }
+                                    }}
+                                    className="px-3 py-2.5 rounded-xl bg-slate-100 text-slate-400 text-[10px] uppercase tracking-wide disabled:opacity-50"
                                   >
                                     Void
                                   </button>
