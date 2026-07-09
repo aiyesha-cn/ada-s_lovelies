@@ -450,10 +450,9 @@ return (
                   </h1>
                 )}
               </div>
-                
-              <span className="text-xs font-normal tracking-wide text-white/80 block">
-                {showBalance ? `${usdcBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDC` : '•••••• USDC'}
-              </span>
+                <span className="text-xs font-normal tracking-wide text-white/80 block">
+                  {showBalance ? `${walletUsdcBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDC` : '•••••• USDC'}
+                </span>
             </div>
           </div>
 
