@@ -286,7 +286,10 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
     setBusy(true); setError(''); setMsg('');
     try {
       await runWithReauth(async () => {
-        const res = await authFetch('/api/faucet/usdc', { method: 'POST' });
+        const res = await authFetch('/api/faucet/usdc', {
+          method: 'POST',
+          body: JSON.stringify({ amount: depositAmount }),
+        });
         const data = await res.json();
         if (!res.ok) {
           throw new Error(data?.error ?? 'Failed to fund wallet with test USDC.');

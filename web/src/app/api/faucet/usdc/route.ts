@@ -10,9 +10,9 @@ import {
 import { verifyAuth } from "@/lib/verifyAuth"
 import { NETWORK_PASSPHRASE, HORIZON_URL, USDC_ISSUER } from "@/lib/stellar"
 
-const FAUCET_AMOUNT = "100"
 
 const horizon = new Horizon.Server(HORIZON_URL)
+
 
 export async function POST(request: Request) {
   const auth = verifyAuth(request)
@@ -30,6 +30,20 @@ export async function POST(request: Request) {
     )
   }
 
+  let amount: string
+  try {
+    const body = await request.json()
+    const parsed = Number(body?.amount)
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return Response.json({ error: "Please provide a valid positive amount." }, { status: 400 })
+    }
+    // Cap — this is a test faucet, not a real payment endpoint.
+    const capped = Math.min(parsed, 1000)
+    amount = capped.toFixed(7)
+  } catch {
+    return Response.json({ error: "Invalid request body." }, { status: 400 })
+  }
+
   try {
     const issuerKeypair = Keypair.fromSecret(issuerSecret)
     const usdcAsset = new Asset("USDC", USDC_ISSUER)
@@ -44,19 +58,18 @@ export async function POST(request: Request) {
         Operation.payment({
           destination: auth.pubkey,
           asset: usdcAsset,
-          amount: FAUCET_AMOUNT,
+          amount,
         }),
       )
       .setTimeout(30)
       .build()
 
     tx.sign(issuerKeypair)
-
     await horizon.submitTransaction(tx)
 
-    return Response.json({ amount: FAUCET_AMOUNT })
+    return Response.json({ amount })
   } catch (error: unknown) {
-    console.error("Faucet funding failed:", error)
+   console.error("Faucet funding failed:", error)
 
     // Horizon wraps operation-level failures in extras.result_codes
     const resultCodes = (error as { response?: { data?: { extras?: { result_codes?: { operations?: string[] } } } } })
