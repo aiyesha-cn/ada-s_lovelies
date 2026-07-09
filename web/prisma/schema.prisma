@@ -17,6 +17,8 @@ model User {
   invitations Invitation[]
   logs        ActivityLog[]
   memberships VaultMember[]
+  sentTransfers     PendingTransfer[] @relation("SentTransfers")
+  receivedTransfers PendingTransfer[] @relation("ReceivedTransfers")
 }
 
 model Vault {
@@ -92,4 +94,18 @@ model Challenge {
   pubkey     String   @id
   challenge  String
   expiresAt  DateTime
+}
+
+model PendingTransfer {
+  id                String   @id @default(cuid())
+  senderPubkey      String
+  recipientPubkey   String
+  amount            Float
+  senderAuthorized  Boolean  @default(false)
+  receiverAuthorized Boolean @default(false)
+  status            String   @default("awaiting_authorization") // "awaiting_authorization" | "ready_to_submit" | "submitted"
+  createdAt         DateTime @default(now())
+
+  sender    User @relation("SentTransfers", fields: [senderPubkey], references: [pubkey])
+  recipient User @relation("ReceivedTransfers", fields: [recipientPubkey], references: [pubkey])
 }
