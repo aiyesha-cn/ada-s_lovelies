@@ -13,7 +13,7 @@ function entryVisual(kind: string) {
   switch (kind) {
     case 'withdraw':
       return { bg: 'bg-[#FFEFE6]', fg: 'text-[#FF5E00]', icon: '↑' };
-    case 'transfer':
+    case 'send':
       return { bg: 'bg-[#E3FCFC]', fg: 'text-[#00A3A3]', icon: '➤' };
     default:
       return { bg: 'bg-[#E6FBF3]', fg: 'text-[#10B981]', icon: '↓' };
