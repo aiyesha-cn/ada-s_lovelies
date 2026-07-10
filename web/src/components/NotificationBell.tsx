@@ -26,7 +26,13 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export default function NotificationBell({ publicKey }: { publicKey: string | null }) {
+export default function NotificationBell({
+  publicKey,
+  onNavigateToVault,
+}: {
+  publicKey: string | null;
+  onNavigateToVault?: (vaultId: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(false);
@@ -46,7 +52,6 @@ export default function NotificationBell({ publicKey }: { publicKey: string | nu
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  // Light polling so a fresh invite shows up without a full page reload
   useEffect(() => {
     if (!publicKey) return;
     const interval = setInterval(() => { void refresh(); }, 30000);
@@ -84,6 +89,16 @@ export default function NotificationBell({ publicKey }: { publicKey: string | nu
       await markAllNotificationsRead();
     } catch {
       void refresh();
+    }
+  };
+
+  const handleNotificationClick = async (n: AppNotification) => {
+    if (!n.read) {
+      await handleMarkRead(n.id);
+    }
+    if (n.vaultId && onNavigateToVault) {
+      onNavigateToVault(n.vaultId);
+      setOpen(false);
     }
   };
 
@@ -127,10 +142,10 @@ export default function NotificationBell({ publicKey }: { publicKey: string | nu
               {notifications.map((n) => (
                 <button
                   key={n.id}
-                  onClick={() => !n.read && handleMarkRead(n.id)}
+                  onClick={() => handleNotificationClick(n)}
                   className={`w-full text-left px-4 py-3 flex gap-2 items-start transition-colors ${
                     n.read ? 'bg-white' : 'bg-orange-50/60 hover:bg-orange-50'
-                  }`}
+                  } ${n.vaultId ? 'cursor-pointer' : ''}`}
                 >
                   {!n.read && <span className="mt-1 w-1.5 h-1.5 rounded-full bg-[#FF5E00] shrink-0" />}
                   <div className="flex-1 min-w-0">

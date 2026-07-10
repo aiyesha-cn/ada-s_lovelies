@@ -75,6 +75,7 @@ model Notification {
   pubkey    String
   message   String
   read      Boolean  @default(false)
+  vaultId   String?
   createdAt DateTime @default(now())
 }
 

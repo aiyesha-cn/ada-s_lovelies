@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { authFetch, walletService } from '@/lib/wallet';
 import { depositUSDC, withdrawUSDC } from '@/lib/transfer';
 import InviteMemberModal from './vault/InviteMemberModal';
@@ -25,6 +25,8 @@ interface VaultsProps {
   publicKey: string | null;
   loading?: boolean;
   onWalletChanged?: () => void | Promise<void>;
+  focusVaultId?: string | null;
+  onFocusHandled?: () => void;
 }
 
 type VaultSubTab = 'owned' | 'joined';
@@ -32,7 +34,17 @@ type MoneyAction = 'deposit' | 'withdraw';
 
 const SESSION_KEY_MISSING_MESSAGE = 'Your session key is unavailable. Please unlock your account again.';
 
-function VaultCard({ vault, onChanged, isOwned }: { vault: VaultData; onChanged: () => void; isOwned: boolean }) {
+function VaultCard({
+  vault,
+  onChanged,
+  isOwned,
+  highlighted,
+}: {
+  vault: VaultData;
+  onChanged: () => void;
+  isOwned: boolean;
+  highlighted?: boolean;
+}) {
   const progress = vault.targetAmount > 0
     ? Math.min(100, (vault.balance / vault.targetAmount) * 100)
     : 0;
@@ -47,6 +59,16 @@ function VaultCard({ vault, onChanged, isOwned }: { vault: VaultData; onChanged:
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
   const [unlocking, setUnlocking] = useState(false);
+
+  const [showHighlight, setShowHighlight] = useState(false);
+
+  useEffect(() => {
+    if (highlighted) {
+      setShowHighlight(true);
+      const t = setTimeout(() => setShowHighlight(false), 2500);
+      return () => clearTimeout(t);
+    }
+  }, [highlighted]);
 
   const openAction = (a: MoneyAction) => {
     setAction(a);
@@ -105,7 +127,13 @@ function VaultCard({ vault, onChanged, isOwned }: { vault: VaultData; onChanged:
   const withdrawDisabled = vault.vaultType !== 'Personal' || !vault.withdrawable;
 
   return (
-    <div className="p-6 rounded-3xl bg-white border border-slate-200/60 shadow-md shadow-slate-900/5 space-y-3">
+    <div
+      className={`p-6 rounded-3xl bg-white border shadow-md shadow-slate-900/5 space-y-3 transition-all duration-700 ${
+        showHighlight
+          ? 'border-[#FF9F1C] ring-2 ring-[#FF9F1C]/40'
+          : 'border-slate-200/60'
+      }`}
+    >
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-semibold text-slate-800">{vault.name}</h4>
         <span className="rounded-full bg-orange-50 border border-orange-100/60 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[#FF5E00]">
@@ -262,7 +290,13 @@ function VaultCard({ vault, onChanged, isOwned }: { vault: VaultData; onChanged:
   );
 }
 
-export default function Vaults({ publicKey, loading: parentLoading, onWalletChanged }: VaultsProps) {
+export default function Vaults({
+  publicKey,
+  loading: parentLoading,
+  onWalletChanged,
+  focusVaultId,
+  onFocusHandled,
+}: VaultsProps) {
   const [subTab, setSubTab] = useState<VaultSubTab>('owned');
   const [owned, setOwned] = useState<VaultData[]>([]);
   const [joined, setJoined] = useState<VaultData[]>([]);
@@ -301,6 +335,32 @@ export default function Vaults({ publicKey, loading: parentLoading, onWalletChan
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  useEffect(() => {
+    if (!focusVaultId || (owned.length === 0 && joined.length === 0)) return;
+
+    const inOwned = owned.some((v) => v.id === focusVaultId);
+    const inJoined = joined.some((v) => v.id === focusVaultId);
+
+    if (!inOwned && !inJoined) {
+      // Not loaded yet, or vault not visible to this account — bail quietly.
+      onFocusHandled?.();
+      return;
+    }
+
+    setSubTab(inOwned ? 'owned' : 'joined');
+
+    // Wait a tick for the tab switch to render the target card before scrolling.
+    const timeout = setTimeout(() => {
+      const el = cardRefs.current.get(focusVaultId);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      onFocusHandled?.();
+    }, 50);
+
+    return () => clearTimeout(timeout);
+  }, [focusVaultId, owned, joined, onFocusHandled]);
 
   const isLoading = loading || parentLoading;
   const activeList = subTab === 'owned' ? owned : joined;
@@ -374,12 +434,20 @@ export default function Vaults({ publicKey, loading: parentLoading, onWalletChan
               </p>
             ) : (
               activeList.map((v) => (
-                <VaultCard
+                <div
                   key={v.id}
-                  vault={v}
-                  onChanged={handleVaultChanged}
-                  isOwned={subTab === 'owned'}
-                />
+                  ref={(el) => {
+                    if (el) cardRefs.current.set(v.id, el);
+                    else cardRefs.current.delete(v.id);
+                  }}
+                >
+                  <VaultCard
+                    vault={v}
+                    onChanged={handleVaultChanged}
+                    isOwned={subTab === 'owned'}
+                    highlighted={v.id === focusVaultId}
+                  />
+                </div>
               ))
             )}
           </div>

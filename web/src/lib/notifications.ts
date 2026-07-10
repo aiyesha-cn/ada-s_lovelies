@@ -5,6 +5,7 @@ export interface AppNotification {
   pubkey: string;
   message: string;
   read: boolean;
+  vaultId: string | null;
   createdAt: string;
 }
 
