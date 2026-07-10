@@ -145,7 +145,6 @@ const SESSION_KEY_MISSING_MESSAGE = 'Your session key is unavailable. Please unl
 
 export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) {
   const configured = contractConfigured();
-
   const [state, setState] = useState<SavingsState | null>(null);
   const [walletBalances, setWalletBalances] = useState<Balances | null>(null);
   const [vaultSummary, setVaultSummary] = useState<VaultBalanceSummary | null>(null);
@@ -163,6 +162,7 @@ export default function SavingsDashboard({ publicKey, wallet }: DashboardProps) 
   const [copied, setCopied] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [trust, setTrust] = useState<TrustScore | null>(null);
+  const [focusVaultId, setFocusVaultId] = useState<string | null>(null);
 
   // Form states
   const [depositAmount, setDepositAmount] = useState('250');
@@ -491,7 +491,13 @@ return (
     <div className="flex-1 pb-36 overflow-y-auto">
       <div className="px-6 pt-7 flex justify-between items-center">
         <div />
-        <NotificationBell publicKey={publicKey} />
+          <NotificationBell
+            publicKey={publicKey}
+            onNavigateToVault={(vaultId) => {
+              setActiveTab('vaults');
+              setFocusVaultId(vaultId);
+            }}
+          />
       </div>
 
       {activeTab === 'home' && (
@@ -935,7 +941,13 @@ return (
         
         {/* === VAULT VIEW PANEL === */}
         {activeTab === 'vaults' && (
-          <Vaults publicKey={publicKey} loading={loading} onWalletChanged={refresh} />
+          <Vaults
+            publicKey={publicKey}
+            loading={loading}
+            onWalletChanged={refresh}
+            focusVaultId={focusVaultId}
+            onFocusHandled={() => setFocusVaultId(null)}
+          />
         )}
 
       </div>
