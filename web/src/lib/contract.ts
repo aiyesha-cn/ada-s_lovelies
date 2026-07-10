@@ -88,6 +88,25 @@ export interface VaultBalanceSummary {
   lockLabel: string;
 }
 
+export interface VaultMemberInfo {
+  address: string;
+  role: string;
+  shareBps: number;
+}
+
+export async function readListMembers(vaultId: string | number): Promise<VaultMemberInfo[]> {
+  const resolvedVaultId = resolveVaultId(vaultId);
+  const raw = (await readScVal('list_members', [
+    nativeToScVal(BigInt(resolvedVaultId), { type: 'u64' }),
+  ])) as Array<Record<string, unknown>>;
+
+  return raw.map((m) => ({
+    address: (m.address as { toString: () => string })?.toString?.() ?? String(m.address),
+    role: normalizeEnum(m.role),
+    shareBps: toNumber(m.share_bps),
+  }));
+}
+
 export function contractConfigured(): boolean {
   return Boolean(CONTRACT_ID);
 }
@@ -283,6 +302,40 @@ export async function buildWithdrawXDR(
   const sim = await server.simulateTransaction(tx);
   if (!rpc.Api.isSimulationSuccess(sim)) {
     throw new Error('Simulation failed — the withdraw call would not succeed.');
+  }
+
+  return rpc.assembleTransaction(tx, sim).build().toXDR();
+}
+
+export async function buildAddMemberXDR(
+  owner: string,
+  vaultId: string | number,
+  member: string,
+  shareBps: number,
+): Promise<string> {
+  const contract = new Contract(CONTRACT_ID);
+  const account = await server.getAccount(owner);
+  const resolvedVaultId = resolveVaultId(vaultId);
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call(
+        'add_member',
+        nativeToScVal(Address.fromString(owner), { type: 'address' }),
+        nativeToScVal(BigInt(resolvedVaultId), { type: 'u64' }),
+        nativeToScVal(Address.fromString(member), { type: 'address' }),
+        nativeToScVal(shareBps, { type: 'u32' }),
+      ),
+    )
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(sim)) {
+    throw new Error('Simulation failed — the add_member call would not succeed.');
   }
 
   return rpc.assembleTransaction(tx, sim).build().toXDR();
