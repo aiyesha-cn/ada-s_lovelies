@@ -285,7 +285,9 @@ export default function SavingsDashboard({ publicKey, wallet, onLogout, headerAc
   useEffect(() => {
     let ignore = false;
     if (!publicKey) { setVaultSummary(null); return; }
-    loadVaultSummary(publicKey).then(() => { }).catch(() => { });
+    queueMicrotask(() => {
+      if (!ignore) void loadVaultSummary(publicKey);
+    });
     return () => { ignore = true; };
   }, [loadVaultSummary, publicKey]);
 
@@ -299,7 +301,11 @@ export default function SavingsDashboard({ publicKey, wallet, onLogout, headerAc
   }, [panel, sendMode]);
 
   useEffect(() => {
-    void refreshPendingApproval();
+    let ignore = false;
+    queueMicrotask(() => {
+      if (!ignore) void refreshPendingApproval();
+    });
+    return () => { ignore = true; };
   }, [refreshPendingApproval]);
 
   useEffect(() => {
@@ -487,10 +493,11 @@ return (
   <div className="max-w-md mx-auto min-h-210 bg-[#fffdfb] rounded-[2.5rem] overflow-hidden shadow-xl relative flex flex-col justify-between font-sans tracking-tight border border-slate-200/40 text-[#1A1A1A]">
     
     <div className="flex-1 pb-36 overflow-y-auto">
-      <div className="px-6 pt-7 flex justify-between items-center">
-        <div />
-        <div className="flex items-center gap-1">
-          {headerActions}
+      {activeTab === 'home' && (
+        <div className="px-6 pt-7 flex justify-between items-center">
+          <div className="flex items-center gap-1">
+            {headerActions}
+          </div>
           <NotificationBell
             publicKey={publicKey}
             onNavigateToVault={(vaultId) => {
@@ -507,7 +514,7 @@ return (
             }}
           />
         </div>
-      </div>
+      )}
 
       {activeTab === 'home' && (
         <>
@@ -926,37 +933,43 @@ return (
 
         {/* === ALL ACTIVITY LEDGER === */}
         {activeTab === 'activity' && (
-          <History 
-            history={history} 
-            loading={loading} 
-            onRefresh={refresh} 
-          />
+          <div className="pt-8">
+            <History 
+              history={history} 
+              loading={loading} 
+              onRefresh={refresh} 
+            />
+          </div>
         )}
 
         {/* === PROFILE VIEW PANEL === */}
         {activeTab === 'profile' && (
-          <Profile 
-            publicKey={publicKey}
-            phpRate={phpRate}
-            copied={copied}
-            purchasingPowerSaved={purchasingPowerSaved}
-            onCopyAddress={handleCopyAddress}
-            wallet={wallet}
-            loading={loading}
-            onRefresh={refresh}
-            onLogout={onLogout}
-          />
+          <div className="pt-8">
+            <Profile 
+              publicKey={publicKey}
+              phpRate={phpRate}
+              copied={copied}
+              purchasingPowerSaved={purchasingPowerSaved}
+              onCopyAddress={handleCopyAddress}
+              wallet={wallet}
+              loading={loading}
+              onRefresh={refresh}
+              onLogout={onLogout}
+            />
+          </div>
         )}
         
         {/* === VAULT VIEW PANEL === */}
         {activeTab === 'vaults' && (
-          <Vaults
-            publicKey={publicKey}
-            loading={loading}
-            onWalletChanged={refresh}
-            focusVaultId={focusVaultId}
-            onFocusHandled={() => setFocusVaultId(null)}
-          />
+          <div className="pt-8">
+            <Vaults
+              publicKey={publicKey}
+              loading={loading}
+              onWalletChanged={refresh}
+              focusVaultId={focusVaultId}
+              onFocusHandled={() => setFocusVaultId(null)}
+            />
+          </div>
         )}
 
       </div>
