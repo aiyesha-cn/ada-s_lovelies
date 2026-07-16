@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import Level2Verification from './verification/Level2Verification';
-import { authFetch } from '@/lib/wallet';
 
 interface ProfileProps {
   publicKey: string | null;
@@ -13,7 +12,6 @@ interface ProfileProps {
   onCopyAddress: () => void;
   loading: boolean;
   onRefresh: () => void;
-  onLogout: () => void | Promise<void>;
   wallet: {
     status?: string;
     network?: string;
@@ -38,7 +36,7 @@ interface ProfileProps {
 
 function CheckBadgeIcon({ className = '' }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
       <path d="M9 12l2 2 4-4"></path>
     </svg>
@@ -47,7 +45,7 @@ function CheckBadgeIcon({ className = '' }) {
 
 function LockIcon({ className = '' }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
       <rect x="5" y="11" width="14" height="9" rx="2"></rect>
       <path d="M8 11V7a4 4 0 0 1 8 0v4"></path>
     </svg>
@@ -90,19 +88,8 @@ function SupportIcon({ className = '' }) {
   );
 }
 
-function LogoutIcon({ className = '' }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-      <polyline points="16 17 21 12 16 7"></polyline>
-      <line x1="21" y1="12" x2="9" y2="12"></line>
-    </svg>
-  );
-}
-
 export default function Profile({
   wallet,
-  onLogout,
   username = 'Starry Voyager',
   handle = 'stella_user_882',
   vaultsCount = 12,
@@ -124,35 +111,13 @@ export default function Profile({
   // parent (e.g. to refetch user/points) can react if it needs to.
   const [showLevel2, setShowLevel2] = useState(false);
 
-
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState('');
-
-  const handleDeleteAccount = async () => {
-    setDeleting(true);
-    setDeleteError('');
-    try {
-      const res = await authFetch('/api/users/me', { method: 'DELETE' });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.error ?? 'Failed to delete account');
-      }
-      // Account is soft-deleted server-side — clear local session same as a normal logout.
-      await onLogout();
-    } catch (e: unknown) {
-      setDeleteError(e instanceof Error ? e.message : 'Failed to delete account');
-      setDeleting(false);
-    }
-  };
-
   const handleLevelUpClick = () => {
     setShowLevel2(true);
     onVerifyIdentity?.();
   };
 
   return (
-    <div className="px-5 py-4 space-y-6 animate-fade-in">
+    <div className="px-5 py-4 space-y-7 animate-fade-in">
       {/* Top bar */}
       <div className="flex justify-between items-center px-1">
         <h3 className="text-xl font-semibold text-[#FF5E00] tracking-tight">STELLA Vault</h3>
@@ -162,7 +127,7 @@ export default function Profile({
       </div>
 
       {/* Avatar + identity */}
-      <div className="flex flex-col items-center gap-3 pt-2">
+      <div className="flex flex-col items-center gap-3">
         <div className="relative w-20 h-20">
           <div className="w-20 h-20 rounded-full bg-linear-to-b from-orange-50 to-orange-100 border-4 border-white shadow-md shadow-orange-900/10 overflow-hidden relative">
             <Image
@@ -200,102 +165,82 @@ export default function Profile({
         </div>
       </div>
 
-      {/* Progressive identity */}
+      {/* Progressive identity — one card, one row per level, only the
+          actionable level expands with a CTA. Collapsing levels 1 and 3 to
+          single rows keeps the whole ladder scannable at a glance. */}
       <div className="space-y-2.5">
         <div className="px-1">
           <h3 className="text-sm font-semibold text-slate-800 tracking-tight">Progressive Identity</h3>
           <p className="text-xs font-normal text-slate-400">Verify your account to unlock premium vaults</p>
         </div>
 
-        {/* Level 1 - Phone Verified */}
-        <div className={`rounded-2xl border p-4 space-y-2 ${phoneVerified ? 'bg-emerald-50/60 border-emerald-200/70' : 'bg-white border-slate-200/60'}`}>
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Level 1</span>
-            {phoneVerified && <CheckBadgeIcon className="text-emerald-500" />}
+        <div className="bg-white border border-slate-200/60 rounded-2xl divide-y divide-slate-100">
+          {/* Level 1 */}
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-slate-300 w-4">1</span>
+              <span className="text-sm font-medium text-slate-700">Phone Verified</span>
+            </div>
+            {phoneVerified && <CheckBadgeIcon className="text-emerald-500 shrink-0" />}
           </div>
-          <h4 className="text-sm font-semibold text-slate-800">Phone Verified</h4>
-          <p className="text-xs font-normal text-slate-500">Basic security enabled via SMS 2FA.</p>
-          {phoneVerified && (
-            <span className="inline-block text-[10px] font-semibold uppercase tracking-wider text-emerald-600">✓ Verified</span>
-          )}
-        </div>
 
-        {/* Level 2 - Identity Details */}
-        <div className={`rounded-2xl border p-4 space-y-2 ${identityVerified ? 'bg-emerald-50/60 border-emerald-200/70' : 'bg-orange-50/40 border-orange-200/60'}`}>
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Level 2</span>
-            {identityVerified && <CheckBadgeIcon className="text-emerald-500" />}
+          {/* Level 2 */}
+          <div className="px-4 py-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-300 w-4">2</span>
+                <span className="text-sm font-medium text-slate-700">Identity Details</span>
+              </div>
+              {identityVerified && <CheckBadgeIcon className="text-emerald-500 shrink-0" />}
+            </div>
+            {!identityVerified && (
+              <button
+                onClick={handleLevelUpClick}
+                className="w-full py-2 rounded-xl bg-[#FF5E00] text-white text-xs font-semibold uppercase tracking-wider hover:bg-[#e65300] active:scale-95 transition-all cursor-pointer"
+              >
+                Level Up
+              </button>
+            )}
           </div>
-          <h4 className="text-sm font-semibold text-slate-800">Identity Details</h4>
-          <p className="text-xs font-normal text-slate-500">Required for cross-chain transactions.</p>
-          {!identityVerified && (
-            <button
-              onClick={handleLevelUpClick}
-              className="w-full mt-1 py-2.5 rounded-xl bg-[#FF5E00] text-white text-xs font-semibold uppercase tracking-wider hover:bg-[#e65300] active:scale-95 transition-all cursor-pointer"
-            >
-              Level Up
-            </button>
-          )}
-        </div>
 
-        {/* Level 3 - Community Trust */}
-        <div className={`rounded-2xl border p-4 space-y-2 ${communityTrustUnlocked ? 'bg-emerald-50/60 border-emerald-200/70' : 'bg-slate-50 border-slate-200/60'}`}>
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Level 3</span>
-            {!communityTrustUnlocked && <LockIcon className="text-slate-300" />}
+          {/* Level 3 */}
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-slate-300 w-4">3</span>
+              <span className={`text-sm font-medium ${communityTrustUnlocked ? 'text-slate-700' : 'text-slate-400'}`}>Community Trust</span>
+            </div>
+            {communityTrustUnlocked ? (
+              <CheckBadgeIcon className="text-emerald-500 shrink-0" />
+            ) : (
+              <LockIcon className="text-slate-300 shrink-0" />
+            )}
           </div>
-          <h4 className={`text-sm font-semibold ${communityTrustUnlocked ? 'text-slate-800' : 'text-slate-400'}`}>Community Trust</h4>
-          <p className="text-xs font-normal text-slate-400">The ultimate badge of a trusted STELLA Vault node.</p>
-          {!communityTrustUnlocked && (
-            <button
-              disabled
-              className="w-full mt-1 py-2.5 rounded-xl bg-slate-200 text-slate-400 text-xs font-semibold uppercase tracking-wider cursor-not-allowed"
-            >
-              Locked
-            </button>
-          )}
         </div>
       </div>
 
-      {/* Quick actions grid */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* Quick actions — Account (logout/delete) now lives inside Settings,
+          so this row only carries top-level destinations. */}
+      <div className="grid grid-cols-3 gap-3">
         <button
           onClick={onOpenSettings}
-          className="flex items-center gap-2 justify-center bg-white border border-slate-200/60 rounded-2xl py-3.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
+          className="flex flex-col items-center gap-1.5 justify-center bg-white border border-slate-200/60 rounded-2xl py-3.5 text-[11px] font-medium text-slate-600 hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
         >
           <SettingsIcon className="text-[#FF5E00]" />
           Settings
         </button>
         <button
           onClick={onOpenSecurity}
-          className="flex items-center gap-2 justify-center bg-white border border-slate-200/60 rounded-2xl py-3.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
+          className="flex flex-col items-center gap-1.5 justify-center bg-white border border-slate-200/60 rounded-2xl py-3.5 text-[11px] font-medium text-slate-600 hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
         >
           <SecurityIcon className="text-[#3B82F6]" />
           Security
         </button>
         <button
           onClick={onOpenSupport}
-          className="flex items-center gap-2 justify-center bg-white border border-slate-200/60 rounded-2xl py-3.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
+          className="flex flex-col items-center gap-1.5 justify-center bg-white border border-slate-200/60 rounded-2xl py-3.5 text-[11px] font-medium text-slate-600 hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
         >
           <SupportIcon className="text-[#FF5E00]" />
           Support
-        </button>
-        <button
-          onClick={onLogout}
-          className="flex items-center gap-2 justify-center bg-white border border-slate-200/60 rounded-2xl py-3.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 active:scale-95 transition-all cursor-pointer"
-        >
-          <LogoutIcon />
-          Log Out
-        </button>
-      </div>
-
-      {/* Danger zone */}
-      <div className="pt-1">
-        <button
-          onClick={() => setShowDeleteConfirm(true)}
-          className="w-full py-3 rounded-2xl bg-rose-50 border border-rose-100 text-xs font-semibold text-rose-500 hover:bg-rose-100 active:scale-95 transition-all cursor-pointer"
-        >
-          Delete Account
         </button>
       </div>
 
@@ -318,52 +263,6 @@ export default function Profile({
               setShowLevel2(false);
             }}
           />
-        </div>
-      )}
-
-      {/* Delete account confirmation modal */}
-      {showDeleteConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !deleting) setShowDeleteConfirm(false);
-          }}
-        >
-          <div className="w-full max-w-sm bg-white rounded-3xl p-6 space-y-4 shadow-xl">
-            <h3 className="text-base font-semibold text-slate-800">Delete your account?</h3>
-            <p className="text-xs font-normal text-slate-500 leading-relaxed">
-              This cannot be undone. Withdraw or distribute funds from any vault you own before deleting — the server will block deletion if a vault you own still has a balance, or if you have a transfer in progress.
-            </p>
-
-            {deleteError && (
-              <div className="rounded-xl bg-rose-50 border border-rose-100 px-3 py-2.5">
-                <p className="text-xs font-medium text-rose-600 leading-normal">{deleteError}</p>
-              </div>
-            )}
-
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={handleDeleteAccount}
-                disabled={deleting}
-                className="flex-1 py-2.5 rounded-xl bg-rose-500 text-white text-[11px] font-semibold uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {deleting && (
-                  <svg className="animate-spin h-3 w-3 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                )}
-                {deleting ? 'Deleting…' : 'Yes, delete my account'}
-              </button>
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                disabled={deleting}
-                className="rounded-xl bg-slate-50 border border-slate-100 px-4 py-2.5 text-[11px] uppercase tracking-wide text-slate-400 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { fetchBalances, type Balances } from '@/lib/balances';
 import { walletService, authFetch } from '@/lib/wallet';
 import {
@@ -84,6 +85,7 @@ interface DashboardProps {
 const SESSION_KEY_MISSING_MESSAGE = 'Your session key is unavailable. Please unlock your account again.';
 
 export default function SavingsDashboard({ publicKey, wallet, onLogout, headerActions }: DashboardProps) {
+  const router = useRouter();
   const configured = contractConfigured();
   const [state, setState] = useState<SavingsState | null>(null);
   const [walletBalances, setWalletBalances] = useState<Balances | null>(null);
@@ -632,7 +634,9 @@ return (
               wallet={wallet}
               loading={loading}
               onRefresh={refresh}
-              onLogout={onLogout}
+              onOpenSettings={() => router.push('/settings')}
+              onOpenSecurity={() => router.push('/settings/security')}
+              onOpenSupport={() => router.push('/settings/support')}
             />
           </div>
         )}
