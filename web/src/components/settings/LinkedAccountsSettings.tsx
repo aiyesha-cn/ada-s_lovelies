@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { ChevronLeftIcon, LinkIcon } from '@/app/icons';
+import FundAccount from '@/components/wallet/FundAccount';
+import AddTrustline from '@/components/wallet/AddTrustline';
 
 interface LinkedAccountsSettingsProps {
   onBack?: () => void;
@@ -99,6 +101,29 @@ export default function LinkedAccountsSettings({ onBack, publicKey, network, pro
           </div>
         )}
       </div>
+
+      {/* Wallet setup */}
+      {publicKey && (
+        <div className="space-y-2">
+          <p className="px-1 text-[10px] font-medium uppercase tracking-wider text-slate-400">Wallet Setup</p>
+          <div className="bg-white border border-slate-200/60 rounded-2xl divide-y divide-slate-100 shadow-xs overflow-hidden">
+            <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-700">Fund Wallet</p>
+                <p className="text-xs text-slate-400 mt-0.5">Pull test network assets</p>
+              </div>
+              <FundAccount publicKey={publicKey} onFunded={() => {}} />
+            </div>
+            <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-700">USDC Trustline</p>
+                <p className="text-xs text-slate-400 mt-0.5">Hold and receive USDC</p>
+              </div>
+              <AddTrustline publicKey={publicKey} onDone={() => {}} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Connected services */}
       <div className="space-y-2">
