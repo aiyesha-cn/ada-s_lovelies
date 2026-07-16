@@ -1,6 +1,6 @@
 'use client';
 
-import QRCodeDisplay from './QRCodeDisplay';
+import QRCodeDisplay from '../QRCodeDisplay';
 import type { Panel } from './dashboardTypes';
 
 const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;

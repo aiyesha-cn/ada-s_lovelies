@@ -29,10 +29,10 @@ import Profile from './Profile';
 import Vaults from './Vaults';
 import CreateVault from './vault/CreateVault';
 import NotificationBell from './NotificationBell';
-import { loadProfile, loadTrustScore, type UserProfile, type TrustScore } from '@/lib/auth/verification';
+import type { UserProfile, TrustScore } from '@/lib/auth/verification';
 import { EyeIcon, SparkleStar, NavIcon } from '@/app/icons';
 import PinUnlockPanel from './PinUnlockPanel';
-import DepositReceivePanel from './DepositReceivePanel';
+import DepositReceivePanel from './dashboard/DepositReceivePanel';
 import WithdrawPanel from './WithdrawPanel';
 import SendPanel from './SendPanel';
 import type { Panel, Tab } from '@/lib/dashboardTypes';
@@ -190,9 +190,18 @@ export default function SavingsDashboard({ publicKey, wallet, onLogout, headerAc
   }, [publicKey]);
 
   useEffect(() => {
-    setProfile(loadProfile());
-    setTrust(loadTrustScore());
-  }, []);
+    if (!publicKey) return;
+    authFetch('/api/users/me')
+    .then((r) => r.json())
+    .then((d) => {
+    setProfile(d.profile ?? null);
+    setTrust(d.trust ?? null);
+    })
+    .catch(() => {
+    setProfile(null);
+    setTrust(null);
+    });
+  }, [publicKey]);
 
   useEffect(() => {
     if (!configured) return;
