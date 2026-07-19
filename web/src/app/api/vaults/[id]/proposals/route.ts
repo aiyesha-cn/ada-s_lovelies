@@ -1,5 +1,6 @@
 import "dotenv/config"
 import { prisma } from "@/lib/prisma"
+import { Prisma } from "@prisma/client"
 import { verifyAuth } from "@/lib/verifyAuth"
 import { logActivity } from "@/lib/logActivity"
 
@@ -115,7 +116,7 @@ export async function POST(
         vaultId,
         proposedBy: auth.pubkey,
         type,
-        changes: type === "delete" ? undefined : changes,
+        changes: type === "delete" ? Prisma.JsonNull : (changes as Prisma.InputJsonValue),
       },
     })
 

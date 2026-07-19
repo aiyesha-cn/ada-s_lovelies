@@ -5,7 +5,7 @@
 //! own `#[contractimpl]` blocks. Soroban merges every `pub` function across
 //! those blocks into the contract's exported interface.
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, String, Symbol, Vec};
+use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, String, Symbol, Vec};
 
 // ---------------------------------------------------------------------
 // Errors
@@ -93,6 +93,17 @@ pub struct VaultContract;
 
 #[contractimpl]
 impl VaultContract {
+
+    pub fn upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
+        caller.require_auth();
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotInitialized)?;
+        if caller != admin {
+            return Err(Error::NotAuthorized);
+        }
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        Ok(())
+    }
+
     /// One-time protocol setup. No KYC or identity is collected here — `admin`
     /// is only a placeholder for future protocol-level parameters (e.g. fee
     /// switches), never a gate on who can create or use a vault.
