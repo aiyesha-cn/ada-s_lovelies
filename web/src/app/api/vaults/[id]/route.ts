@@ -2,6 +2,7 @@ import "dotenv/config"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth } from "@/lib/verifyAuth"
 import { logActivity } from "@/lib/logActivity"
+import { readVaultBalanceSummary } from "@/lib/contract"
 
 export async function PATCH(
   request: Request,
@@ -96,15 +97,19 @@ export async function DELETE(
       return Response.json({ error: "Vault is already closed" }, { status: 409 })
     }
 
-    if (vault.balance !== 0) {
+    // Re-read live on-chain balance rather than trusting the last-known DB
+    // value — the client just submitted an on-chain close_vault call, so the
+    // DB's cached balance may be stale by the time this request arrives.
+    const summary = await readVaultBalanceSummary(vault.onChainVaultId.toString(), auth.pubkey)
+    const liveBalance = summary?.balance ?? vault.balance
+
+    if (liveBalance !== 0) {
       return Response.json({ error: "Withdraw all funds before deleting this vault" }, { status: 409 })
     }
 
-    // Client must submit a signed close_vault XDR and confirm it on-chain
-    // before calling this route — this only syncs the DB afterward.
     const updated = await prisma.vault.update({
       where: { id: vaultId },
-      data: { status: "Closed" },
+      data: { status: "Closed", balance: liveBalance },
     })
 
     await logActivity({
