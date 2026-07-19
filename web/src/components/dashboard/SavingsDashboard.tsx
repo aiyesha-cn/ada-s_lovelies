@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { fetchBalances, type Balances } from '@/lib/balances';
 import { walletService, authFetch } from '@/lib/wallet';
 import {
@@ -525,29 +526,22 @@ return (
       {activeTab === 'home' && (
         <>
           <div className="mx-6 mt-6 p-6 rounded-3xl bg-linear-to-br from-[#FFB238] via-[#FF9F1C] to-[#F37A00] text-white shadow-[0_18px_30px_-14px_rgba(230,80,0,0.40)] relative overflow-hidden">
-            {/* Dashed orbit + safe-door glyph, echoing the dial motif */}
-            <div className="absolute -right-6 top-1/2 -translate-y-1/2 w-32 h-32 rounded-full border border-dashed border-white/25 pointer-events-none" />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 w-20 h-20 rounded-2xl bg-white/10 backdrop-blur-[1px] pointer-events-none flex items-center justify-center">
-              <div className="w-9 h-9 rounded-full border-[3px] border-white/25 flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-white/40" />
-              </div>
-            </div>
-            <div className="absolute right-24 top-6 w-1.5 h-1.5 bg-white/50 rounded-full pointer-events-none" />
-            <div className="absolute right-28 top-11 w-1 h-1 bg-white/40 rounded-full pointer-events-none" />
+            {/* Safe icon artwork, echoing the vault/dial motif */}
+            <Image
+              src="/safe-icon.png"
+              alt=""
+              aria-hidden="true"
+              width={176}
+              height={176}
+              className="absolute -right-6 top-1/2 -translate-y-1/2 w-55 h-55 object-contain pointer-events-none select-none"
+            />
 
             <div className="space-y-2 relative z-10">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] tracking-[0.14em] uppercase font-semibold text-white/80">Total Balance</span>
-                <button
-                  onClick={() => setShowBalance(!showBalance)}
-                  className="w-6 h-6 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
-                  aria-label="Toggle balance visibility"
-                >
-                  <EyeIcon className="w-3.5 h-3.5" />
-                </button>
               </div>
 
-              <div className="flex items-baseline gap-1 mt-3">
+              <div className="flex items-baseline gap-1.5 mt-3">
                 <span className="text-lg font-semibold text-white/85">₱</span>
                 {loading ? (
                   <h1 className="text-xl font-light text-white/60">Loading…</h1>
@@ -556,34 +550,25 @@ return (
                     {showBalance ? totalEquivalentInPhp.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '••••••'}
                   </h1>
                 )}
+                <button
+                  onClick={() => setShowBalance(!showBalance)}
+                  className="w-6 h-6 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors shrink-0 self-center"
+                  aria-label="Toggle balance visibility"
+                >
+                  <EyeIcon className="w-3.5 h-3.5" />
+                </button>
               </div>
 
               <span className="text-xs font-medium tracking-wide text-white/80 flex items-center gap-1.5 pt-1">
-                {showBalance ? `≈ ${walletUsdcBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDC` : '•••••• USDC'}
+                {showBalance ? `≈ ${walletUsdcBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC` : '•••••• USDC'}
                 <span className="w-1 h-1 rounded-full bg-white/40" />
                 <span className="text-white/60">updated just now</span>
               </span>
             </div>
           </div>
-          
-          {/* Quick-glance insight strip */}
-          <div className="mx-6 mt-9 grid grid-cols-3 gap-3">
-            <div className="rounded-2xl bg-white border border-slate-100 p-3.5">
-              <p className="text-[10px] font-semibold tracking-wide text-slate-400 uppercase">This month</p>
-              <p className="text-base font-semibold text-[#E3790A] mt-1">+₱1,240</p>
-            </div>
-            <div className="rounded-2xl bg-white border border-slate-100 p-3.5">
-              <p className="text-[10px] font-semibold tracking-wide text-slate-400 uppercase">Vaults</p>
-              <p className="text-base font-semibold text-slate-800 mt-1">{vaultsCount || 0}</p>
-            </div>
-            <div className="rounded-2xl bg-white border border-slate-100 p-3.5">
-              <p className="text-[10px] font-semibold tracking-wide text-slate-400 uppercase">Streak</p>
-              <p className="text-base font-semibold text-slate-800 mt-1">12 days</p>
-            </div>
-          </div>
 
           {/* Spinning Dial Core Wrapper */}
-          <div className="mt-17 mb-5">
+          <div className="mt-25 mb-5">
             <Wheel 
               activeTab={activeTab} 
               panel={panel} 
