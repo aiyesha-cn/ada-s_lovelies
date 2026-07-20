@@ -19,9 +19,28 @@ export default function Home() {
   const [authChecked, setAuthChecked] = useState(false);
   const [funded, setFunded] = useState(false);
   const [linked, setLinked] = useState(false);
+  const [profile, setProfile] = useState<{ username?: string; avatarUrl?: string } | null>(null);
 
   const refresh = useCallback(() => setLocalRefreshKey((k) => k + 1), []);
 
+  // Pull the profile set at registration (POST /api/users in the
+  // onboarding flow) so Profile shows the real username/avatar instead of
+  // its hardcoded placeholder defaults.
+  useEffect(() => {
+    let ignore = false;
+    if (!publicKey) { setProfile(null); return; }
+    fetch(`/api/users/${publicKey}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((user) => {
+        if (!ignore) setProfile(user);
+      })
+      .catch(() => {
+        if (!ignore) setProfile(null);
+      });
+    return () => { ignore = true; };
+  }, [publicKey, localRefreshKey]);
+
+  
   // Track wallet setup completion so the Fund/Trustline header icons can
   // disappear once they're no longer needed — they're one-time onboarding
   // steps, not ongoing controls like Connect or Notifications.
@@ -82,7 +101,7 @@ export default function Home() {
     return (
       <main className="min-h-screen w-full bg-[#FAF6F0] flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#6C5DD3] border-t-transparent" />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#FF9F1C] border-t-transparent" />
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
             Checking session…
           </p>
@@ -110,20 +129,19 @@ export default function Home() {
               />
             </div>
             <p className="text-xs font-black text-slate-800 mb-1.5 uppercase tracking-wide">
-              Authorization Credentials Required
+              Connect your wallet
             </p>
             <p className="text-[11px] font-semibold text-slate-400 leading-relaxed max-w-xs mx-auto">
-              Connect your Freighter hardware or browser layer extension to configure your profile token variables.
-              If needed,{' '}
-              
-                <a href="https://freighter.app"
+              Link your Freighter wallet to see your balance and start saving.
+              Don't have it yet?{' '}
+              <a href="https://freighter.app"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-black text-[#FF5E00] hover:underline"
               >
-                Install Freighter Extension
+                Install Freighter
               </a>{' '}
-              and switch the runtime to Test Net mode.
+              and switch it to Test Net.
             </p>
           </div>
         )}
@@ -135,6 +153,8 @@ export default function Home() {
             wallet={wallet}
             publicKey={publicKey}
             onLogout={handleLogout}
+            username={profile?.username ?? undefined}
+            avatarSrc={profile?.avatarUrl ?? undefined}
             headerActions={
               <>
                 {publicKey && !funded && (
