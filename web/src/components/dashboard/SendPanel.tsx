@@ -102,7 +102,7 @@ export default function SendPanel({
                     disabled={busy || !recipient || !transferAmount || Number(transferAmount) <= 0}
                     className="w-full py-3 rounded-xl bg-linear-to-r from-[#FF9F1C] to-[#F37A00] text-white text-[10px] uppercase tracking-widest hover:opacity-95 transition-opacity disabled:opacity-40"
                   >
-                    {busy ? 'Sending Request…' : 'Request'}
+                    {busy ? 'Sending Request…' : 'Send'}
                   </button>
                 </div>
               )}
