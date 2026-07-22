@@ -111,6 +111,7 @@ export default function RegisterPage() {
       phoneVerified: true,
       tosAccepted: true,
       email: email || undefined,
+      profilePicture: profilePicture ?? undefined,
       verificationLevel: 0,
       createdAt: new Date().toISOString(),
     });
@@ -121,6 +122,7 @@ export default function RegisterPage() {
         body: JSON.stringify({
           pubkey: publicKey,
           username: displayName.trim(),
+          avatarUrl: profilePicture ?? undefined,
         }),
       });
     } catch {

@@ -122,7 +122,7 @@ interface DashboardProps {
   /** The user's actual registered profile (from GET /api/users/[pubkey]).
    *  Left undefined until it loads, so Profile falls back to its defaults
    *  rather than flashing a wrong name. */
-  username?: string;
+  username?: string;  
   avatarSrc?: string;
 }
 
