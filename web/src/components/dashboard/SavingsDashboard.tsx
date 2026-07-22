@@ -617,10 +617,9 @@ return (
                     onCopyAddress={handleCopyAddress}
                     receiveRequestAmount={receiveRequestAmount}
                     onReceiveRequestAmountChange={setReceiveRequestAmount}
-                    pendingApproval={pendingApproval
+                    pendingApproval={pendingApproval}
                     onApproveAsReceiver={handleApproveAsReceiver}
                     onVoidPendingApproval={handleVoidPendingApproval}
-                    }
                   />
                 )}
 

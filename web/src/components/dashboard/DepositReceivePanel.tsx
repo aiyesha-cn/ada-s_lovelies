@@ -81,7 +81,7 @@ export default function DepositReceivePanel({
   onCopyAddress: () => void;
   receiveRequestAmount: string;
   onReceiveRequestAmountChange: (value: string) => void;
-  pendingApprovval: PendingTransferApproval | null;
+  pendingApproval: PendingTransferApproval | null;
   onApproveAsReceiver: () => void;
   onVoidPendingApproval: () => void;
 }) {
