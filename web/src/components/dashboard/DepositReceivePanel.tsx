@@ -2,6 +2,7 @@
 
 import QRCodeDisplay from '@/components/shared/QRCodeDisplay';
 import type { Panel } from '@/lib/dashboardTypes';
+import { PendingTransferApproval } from '@/lib/transfer';
 
 const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
 
@@ -61,6 +62,9 @@ export default function DepositReceivePanel({
   onCopyAddress,
   receiveRequestAmount,
   onReceiveRequestAmountChange,
+  pendingApproval,
+  onApproveAsReceiver,
+  onVoidPendingApproval,
 }: {
   panel: Panel;
   setPanel: (panel: Panel) => void;
@@ -77,6 +81,9 @@ export default function DepositReceivePanel({
   onCopyAddress: () => void;
   receiveRequestAmount: string;
   onReceiveRequestAmountChange: (value: string) => void;
+  pendingApproval: PendingTransferApproval | null;
+  onApproveAsReceiver: () => void;
+  onVoidPendingApproval: () => void;
 }) {
   const depositValue = (Number(depositAmount) || 0) * phpRate;
   const requestValue = Number(receiveRequestAmount) || 0;
@@ -145,6 +152,41 @@ export default function DepositReceivePanel({
 
       {panel === 'receive' && publicKey && (
         <div className="space-y-4 animate-fadeIn">
+          {pendingApproval && pendingApproval.recipient === publicKey && (
+            <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4 space-y-3 text-[11px] animate-fadeIn">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                <span className="text-[10px] uppercase text-slate-400 font-light tracking-wider">Incoming Transfer</span>
+                <span className="font-normal text-slate-800">{pendingApproval.amount} USDC</span>
+              </div>
+              <p className="truncate text-slate-400 font-light text-[10px]">
+                <span className="uppercase tracking-wide">From:</span> {pendingApproval.sender}
+              </p>
+              <div className="flex gap-2 pt-1">
+                {!pendingApproval.receiverAuthorized ? (
+                  <button
+                    type="button"
+                    onClick={onApproveAsReceiver}
+                    disabled={busy}
+                    className="flex-1 py-2.5 rounded-xl bg-linear-to-r from-[#FF9F1C] to-[#F37A00] text-white text-[10px] uppercase tracking-wider disabled:opacity-50"
+                  >
+                    {busy ? 'Signing…' : 'Sign to Accept'}
+                  </button>
+                ) : (
+                  <span className="flex-1 py-2.5 text-center rounded-xl bg-[#E0FBFB] text-slate-700 text-[10px] uppercase tracking-wider">
+                    Waiting for sender
+                  </span>
+                )}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={onVoidPendingApproval}
+                  className="px-3 py-2.5 rounded-xl bg-slate-100 text-slate-400 text-[10px] uppercase tracking-wide disabled:opacity-50"
+                >
+                  Decline
+                </button>
+              </div>
+            </div>
+          )}
           <div className="flex justify-end">
             <div className="flex shrink-0 p-0.5 bg-slate-50 border border-slate-100 rounded-lg">
               <button
