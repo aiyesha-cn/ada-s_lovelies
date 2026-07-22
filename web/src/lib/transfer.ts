@@ -160,6 +160,7 @@ async function runTransfer(
   operation: TransferOperation,
   amount: string | number,
   vaultId: string | number | undefined,
+  dbVaultId: string | undefined,
   options: TransferOptions = {},
 ): Promise<TransferResult> {
   const normalizedAmount = normalizeAmount(amount);
@@ -267,18 +268,20 @@ async function runTransfer(
 
 export async function depositUSDC(
   amount: string | number,
-  vaultId: string | number,
+  onChainVaultId: string | number,
+  dbVaultId: string,
   options: TransferOptions = {},
 ): Promise<TransferResult> {
-  return runTransfer('deposit', amount, vaultId, options);
+  return runTransfer('deposit', amount, onChainVaultId, dbVaultId, options);
 }
 
 export async function withdrawUSDC(
   amount: string | number,
-  vaultId: string | number,
+  onChainVaultId: string | number,
+  dbVaultId: string,
   options: TransferOptions = {},
 ): Promise<TransferResult> {
-  return runTransfer('withdraw', amount, vaultId, options);
+  return runTransfer('withdraw', amount, onChainVaultId, dbVaultId, options);
 }
 
 export async function transferUSDC(
