@@ -32,7 +32,14 @@ export async function DELETE(request: Request) {
     return Response.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  // Block deletion if the user owns a vault that still has funds in it.
+  const user = await prisma.user.findUnique({ where: { pubkey: auth.pubkey } })
+
+  if (!user || user.deletedAt) {
+    return Response.json({ error: "Account no longer active" }, { status: 401 })
+  }
+
+  // Block deletion if the user still owns a vault holding funds.
+  // Avoids silently orphaning a balance nobody can act on afterward.
   const ownedVaultWithBalance = await prisma.vault.findFirst({
     where: {
       ownerPubkey: auth.pubkey,
@@ -43,7 +50,9 @@ export async function DELETE(request: Request) {
 
   if (ownedVaultWithBalance) {
     return Response.json(
-      { error: `Withdraw or distribute the funds in "${ownedVaultWithBalance.name}" before deleting your account.` },
+      {
+        error: `Withdraw or distribute the funds in "${ownedVaultWithBalance.name}" before deleting your account.`,
+      },
       { status: 409 },
     )
   }
@@ -64,7 +73,17 @@ export async function DELETE(request: Request) {
     )
   }
 
-  await prisma.user.delete({ where: { pubkey: auth.pubkey } })
+  await prisma.user.update({
+    where: { pubkey: auth.pubkey },
+    data: {
+      deletedAt: new Date(),
+      // Scrub identifying profile info on delete; pubkey itself is kept
+      // since historical ActivityLog/Vault/Invitation records still
+      // reference it by foreign key.
+      username: null,
+      avatarUrl: null,
+    },
+  })
 
   return new Response(null, { status: 204 })
 }
