@@ -122,7 +122,7 @@ interface DashboardProps {
   /** The user's actual registered profile (from GET /api/users/[pubkey]).
    *  Left undefined until it loads, so Profile falls back to its defaults
    *  rather than flashing a wrong name. */
-  username?: string;
+  username?: string;  
   avatarSrc?: string;
 }
 
@@ -236,19 +236,19 @@ export default function SavingsDashboard({ publicKey, wallet, onLogout, headerAc
   useEffect(() => {
     if (!publicKey) return;
     authFetch('/api/users/me')
-    .then((r) => r.json())
-    .then((d) => {
-    setProfile(d.profile ?? null);
-    setTrust(d.trust ?? null);
-    setPoints(d.points ?? 0);
-    setVaultsCount(d.vaultsCount ?? 0);
-    })
-    .catch(() => {
-    setProfile(null);
-    setTrust(null);
-    setPoints(0);
-    setVaultsCount(0);
-    });
+      .then((r) => r.json())
+      .then((d) => {
+        setProfile(d.profile ?? null);
+        setTrust(d.trust ?? null);
+        setPoints(d.points ?? 0);
+        setVaultsCount(d.vaultsCount ?? 0);
+      })
+      .catch(() => {
+        setProfile(null);
+        setTrust(null);
+        setPoints(0);
+        setVaultsCount(0);
+      });
   }, [publicKey]);
 
   useEffect(() => {
@@ -311,6 +311,16 @@ export default function SavingsDashboard({ publicKey, wallet, onLogout, headerAc
       .then((d) => { if (d?.rates?.PHP) setPhpRate(d.rates.PHP); })
       .catch(() => { });
   }, []);
+
+  useEffect(() => {
+  if (!publicKey) return;
+  const interval = setInterval(() => {
+    fetchBalances(publicKey)
+      .then((b) => setWalletBalances(b))
+      .catch(() => {});
+  }, 20000); // every 20s
+  return () => clearInterval(interval);
+}, [publicKey]);
 
   /* ---------- Handlers ---------- */
 
@@ -519,6 +529,10 @@ return (
                 }, 4000);
               };
             }}
+            onNavigateToTransfer={() => {
+              setActiveTab('home');
+              setPanel('receive');
+            }}
           />
         </div>
       )}
@@ -613,6 +627,9 @@ return (
                     onCopyAddress={handleCopyAddress}
                     receiveRequestAmount={receiveRequestAmount}
                     onReceiveRequestAmountChange={setReceiveRequestAmount}
+                    pendingApproval={pendingApproval}
+                    onApproveAsReceiver={handleApproveAsReceiver}
+                    onVoidPendingApproval={handleVoidPendingApproval}
                   />
                 )}
 
@@ -693,11 +710,10 @@ return (
               loading={loading}
               onRefresh={refresh}
               onOpenSettings={() => router.push('/settings')}
-              {...(username !== undefined && { username })}
-              {...(avatarSrc !== undefined && { avatarSrc })}
               points={points}
               vaultsCount={vaultsCount}
-              username={profile?.displayName ?? undefined}
+              username={profile?.displayName ?? username}
+              avatarSrc={profile?.profilePicture ?? avatarSrc}
               phoneVerified={profile?.phoneVerified}
               phoneNumber={profile?.phoneNumber ?? undefined}
               identityVerified={profile?.alternativeIdVerified}

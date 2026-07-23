@@ -20,8 +20,8 @@ export default function AccountSettings({ onBack, onLogout, phoneNumber }: Accou
     setDeleteError('');
     try {
       const res = await authFetch('/api/users/me', { method: 'DELETE' });
-      const data = await res.json();
       if (!res.ok) {
+        const data = await res.json().catch(() => null);
         throw new Error(data?.error ?? 'Failed to delete account');
       }
       // Account is soft-deleted server-side — clear local session same as a normal logout.
