@@ -716,7 +716,13 @@ return (
               avatarSrc={profile?.profilePicture ?? avatarSrc}
               phoneVerified={profile?.phoneVerified}
               phoneNumber={profile?.phoneNumber ?? undefined}
-              identityVerified={profile?.alternativeIdVerified}
+              identityVerified={(profile?.verificationLevel ?? 1) >= 2}
+              communityTrustUnlocked={(profile?.verificationLevel ?? 1) >= 3}
+              onVerifyIdentity={() => {
+              authFetch('/api/users/me')
+                .then((r) => r.json())
+                .then((d) => setProfile(d.profile ?? null));
+              }}
             />
           </div>
         )}

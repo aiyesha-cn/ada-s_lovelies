@@ -1,10 +1,18 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Level2Verification from '@/components/verification/Level2Verification';
 import EditProfileModal from '@/components/profile/EditProfileModal';
+import { authFetch } from '@/lib/wallet';
 import { CheckBadgeIcon, LockIcon, EditIcon, SettingsIcon } from '@/app/icons';
+
+const LEVEL3_CHECK_LABELS: Record<string, string> = {
+  hasCompletedVaults: '2+ completed collaborative vaults',
+  hasOnTimeHistory: '10+ on-time contributions',
+  noDisputes: 'No disputes or fraud reports',
+  hasAccountAge: 'Account active for 3+ months',
+};
 
 interface ProfileProps {
   publicKey: string | null;
@@ -64,9 +72,39 @@ export default function Profile({
   // parent (e.g. to refetch user/points) can react if it needs to.
   const [showLevel2, setShowLevel2] = useState(false);
 
+  // Live Level 3 eligibility, fetched once Level 2 is done. Drives both the
+  // "x/4" summary in the collapsed row and the full checklist when expanded.
+  const [level3Status, setLevel3Status] = useState<{
+    eligible: boolean;
+    checks?: Record<string, boolean>;
+    reasons?: string[];
+  } | null>(null);
+
+  useEffect(() => {
+    if (!identityVerified || !publicKey) return;
+    authFetch('/api/verification/level3-status')
+      .then((r) => r.json())
+      .then((d) => setLevel3Status(d))
+      .catch(() => setLevel3Status(null));
+  }, [identityVerified, publicKey]);
+
   const handleLevelUpClick = () => {
     setShowLevel2(true);
     onVerifyIdentity?.();
+  };
+
+  const handleLevelUpToLevel3Click = async () => {
+    try {
+      const res = await authFetch('/api/verification/level3', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        onVerifyIdentity?.();
+      } else {
+        console.log('Not eligible yet:', data.reasons);
+      }
+    } catch (e) {
+      console.error('Level 3 upgrade failed', e);
+    }
   };
 
   return (
@@ -164,15 +202,46 @@ export default function Profile({
           </div>
 
           {/* Level 3 */}
-          <div className="flex items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-2.5">
-              <span className="text-[10px] font-medium uppercase tracking-wider text-slate-300 w-4">3</span>
-              <span className={`text-sm font-medium ${communityTrustUnlocked ? 'text-slate-700' : 'text-slate-400'}`}>Community Trust</span>
+          <div className="px-4 py-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-300 w-4">3</span>
+                <span className={`text-sm font-medium ${identityVerified ? 'text-slate-700' : 'text-slate-400'}`}>Community Trust</span>
+              </div>
+              {communityTrustUnlocked ? (
+                <CheckBadgeIcon className="text-emerald-500 shrink-0" />
+              ) : !identityVerified ? (
+                <LockIcon className="text-slate-300 shrink-0" />
+              ) : level3Status ? (
+                <span className="text-[10px] font-medium text-slate-400">
+                  {Object.entries(level3Status.checks ?? {}).filter(([k, v]) => v && k !== 'hasVerificationLevel2').length}/4
+                </span>
+              ) : null}
             </div>
-            {communityTrustUnlocked ? (
-              <CheckBadgeIcon className="text-emerald-500 shrink-0" />
-            ) : (
-              <LockIcon className="text-slate-300 shrink-0" />
+
+            {identityVerified && !communityTrustUnlocked && level3Status && (
+              <>
+                <ul className="space-y-1.5 pl-6.5">
+                  {Object.entries(LEVEL3_CHECK_LABELS).map(([key, label]) => {
+                    const passed = level3Status.checks?.[key] ?? false;
+                    return (
+                      <li key={key} className="flex items-center gap-2 text-xs text-slate-500">
+                        <span className={passed ? 'text-emerald-500' : 'text-slate-300'}>
+                          {passed ? '✓' : '○'}
+                        </span>
+                        {label}
+                      </li>
+                    );
+                  })}
+                </ul>
+                <button
+                  onClick={handleLevelUpToLevel3Click}
+                  disabled={!level3Status.eligible}
+                  className="w-full py-2 rounded-xl bg-linear-to-br from-[#FFB238] via-[#FF9F1C] to-[#F37A00] text-white text-xs font-semibold uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#e65300] active:scale-95 transition-all cursor-pointer"
+                >
+                  Level Up
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -208,9 +277,10 @@ export default function Profile({
             verifiedPhone={phoneNumber}
             onClose={() => setShowLevel2(false)}
             onComplete={() => {
-              // Close on success; parent should refetch identityVerified via onVerifyIdentity
-              // or its own data source once the backend call in StepSummary confirms.
+              // Close on success; refetch so the real (post-submission) verificationLevel
+              // flows back down from SavingsDashboard into this component's props.
               setShowLevel2(false);
+              onVerifyIdentity?.();
             }}
           />
         </div>
