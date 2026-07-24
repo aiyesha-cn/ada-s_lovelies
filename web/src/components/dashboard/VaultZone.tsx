@@ -26,8 +26,8 @@ export default function VaultZone({
   setPanel,
 }: VaultZoneProps) {
   return (
-    <>
-      <div className="mx-6 mt-6 p-6 rounded-3xl bg-linear-to-br from-[#FFB238] via-[#FF9F1C] to-[#F37A00] text-white shadow-[0_18px_30px_-14px_rgba(230,80,0,0.40)] relative overflow-hidden">
+    <div className="mx-6 mt-6 space-y-5">
+      <div className="p-6 rounded-3xl bg-linear-to-br from-[#FFB238] via-[#FF9F1C] to-[#F37A00] text-white shadow-[0_18px_30px_-14px_rgba(230,80,0,0.40)] relative overflow-hidden">
         <Image
           src="/safeIcon.png"
           alt=""
@@ -37,7 +37,7 @@ export default function VaultZone({
           className="absolute right-6 top-1/2 -translate-y-1/2 w-40 h-40 object-contain pointer-events-none select-none"
         />
 
-        <div className="space-y-2 relative z-10">
+        <div className="space-y-6 relative z-10">
           <div className="flex items-center justify-between">
             <span className="text-[11px] tracking-[0.14em] uppercase font-semibold text-white/80">Total Balance</span>
           </div>
@@ -66,43 +66,41 @@ export default function VaultZone({
         </div>
       </div>
 
+      <div className="grid grid-cols-3 gap-4 px-2">
+        {([
+          { key: 'deposit' as Panel, label: 'Deposit', Icon: DepositIcon },
+          { key: 'withdraw' as Panel, label: 'Withdraw', Icon: WithdrawIcon },
+          { key: 'create' as Panel, label: 'Create Vault', Icon: CreateIcon },
+        ]).map(({ key, label, Icon }) => {
+          const isActive = panel === key;
+          return (
+            <button
+              key={key}
+              onClick={() => setPanel(key)}
+              className="flex flex-col items-center gap-2 group"
+            >
+              <span
+                className={`flex items-center justify-center w-14 h-14 rounded-full border transition-all duration-200 active:scale-90 group-hover:scale-[1.05] ${
+                  isActive
+                    ? 'bg-linear-to-b from-white to-orange-50/70 border-[#FF9F1C] text-[#FF9F1C] shadow-[0_6px_18px_-6px_rgba(255,159,28,0.55)] ring-4 ring-orange-100/70'
+                    : 'bg-linear-to-b from-white to-slate-50 border-slate-200 text-slate-500 shadow-[0_3px_10px_-4px_rgba(15,23,42,0.15)] group-hover:border-orange-200 group-hover:text-[#FF9F1C]'
+                }`}
+              >
+                <Icon className="w-5.5 h-5.5" />
+              </span>
+              <span className={`text-[10px] tracking-wider uppercase font-semibold px-2.5 py-1 rounded-full transition-colors ${
+                isActive ? 'text-orange-700 bg-orange-50 border border-orange-200' : 'text-slate-500'
+              }`}>
+                {label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="mt-8 mb-6 flex flex-col items-center">
         <VaultCore goalProgress={72} vaultLevel={3} />
       </div>
-
-      <div className="mx-6 mb-6">
-        <div className="grid grid-cols-3 gap-4 px-2">
-          {([
-            { key: 'deposit' as Panel, label: 'Deposit', Icon: DepositIcon },
-            { key: 'withdraw' as Panel, label: 'Withdraw', Icon: WithdrawIcon },
-            { key: 'create' as Panel, label: 'Create Vault', Icon: CreateIcon },
-          ]).map(({ key, label, Icon }) => {
-            const isActive = panel === key;
-            return (
-              <button
-                key={key}
-                onClick={() => setPanel(key)}
-                className="flex flex-col items-center gap-2 group"
-              >
-                <span
-                  className={`flex items-center justify-center w-14 h-14 rounded-full border transition-all duration-200 active:scale-90 group-hover:scale-[1.05] ${
-                    isActive
-                      ? 'bg-linear-to-b from-white to-orange-50/70 border-[#FF9F1C] text-[#FF9F1C] shadow-[0_6px_18px_-6px_rgba(255,159,28,0.55)] ring-4 ring-orange-100/70'
-                      : 'bg-linear-to-b from-white to-slate-50 border-slate-200 text-slate-500 shadow-[0_3px_10px_-4px_rgba(15,23,42,0.15)] group-hover:border-orange-200 group-hover:text-[#FF9F1C]'
-                  }`}
-                >
-                  <Icon className="w-5.5 h-5.5" />
-                </span>
-                <span className={`text-[10px] tracking-wider uppercase font-semibold px-2.5 py-1 rounded-full transition-colors ${
-                  isActive ? 'text-orange-700 bg-orange-50 border border-orange-200' : 'text-slate-500'
-                }`}>
-                  {label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </>
+    </div>
   );
 }
