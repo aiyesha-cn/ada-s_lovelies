@@ -24,7 +24,7 @@ import {
   type PendingTransferApproval,
 } from '@/lib/transfer';
 import { loadHistory, type HistoryEntry } from '@/lib/history';
-import Wheel from '@/components/dashboard/Wheel';
+import VaultCore from '@/components/dashboard/VaultCore';
 import History from '@/components/dashboard/History';
 import MoneyTracker from '@/components/tracker/MoneyTracker';
 import Profile from '@/components/profile/Profile';
@@ -33,7 +33,7 @@ import CreateVault from '@/components/vault/CreateVault';
 import NotificationBell from '@/components/shared/NotificationBell';
 import { useToast } from '@/components/shared/Toast';
 import { loadProfile, loadTrustScore, type UserProfile, type TrustScore } from '@/lib/auth/verification';
-import { EyeIcon, SparkleStar, SendIcon, ReceiveIcon } from '@/app/icons';
+import { EyeIcon, SparkleStar, NavIcon, SendIcon, ReceiveIcon, DepositIcon, WithdrawIcon, CreateIcon } from '@/app/icons';
 import { BudgetProvider } from '@/lib/budgets';
 
 /** currentColor-based glyphs so the active tab's orange color can be set by the wrapper. */
@@ -598,14 +598,44 @@ return (
             </div>
           </div>
 
-          {/* Spinning Dial Core Wrapper */}
-          <div className="mt-25 mb-5">
-            <Wheel 
-              activeTab={activeTab} 
-              panel={panel} 
-              setActiveTab={(tab) => setActiveTab(tab as Tab)} 
-              setPanel={setPanel} 
-            />
+          {/* Vault Core */}
+          <div className="mt-8 mb-6 flex flex-col items-center">
+            <VaultCore goalProgress={72} vaultLevel={3} />
+          </div>
+
+          {/* Vault Actions */}
+          <div className="mx-6 mb-6">
+            <div className="grid grid-cols-3 gap-4 px-2">
+              {([
+                { key: 'deposit' as Panel, label: 'Deposit', Icon: DepositIcon },
+                { key: 'withdraw' as Panel, label: 'Withdraw', Icon: WithdrawIcon },
+                { key: 'create' as Panel, label: 'Create Vault', Icon: CreateIcon },
+              ]).map(({ key, label, Icon }) => {
+                const isActive = panel === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setPanel(key)}
+                    className="flex flex-col items-center gap-2 group"
+                  >
+                    <span
+                      className={`flex items-center justify-center w-14 h-14 rounded-full border transition-all duration-200 active:scale-90 group-hover:scale-[1.05] ${
+                        isActive
+                          ? 'bg-linear-to-b from-white to-orange-50/70 border-[#FF9F1C] text-[#FF9F1C] shadow-[0_6px_18px_-6px_rgba(255,159,28,0.55)] ring-4 ring-orange-100/70'
+                          : 'bg-linear-to-b from-white to-slate-50 border-slate-200 text-slate-500 shadow-[0_3px_10px_-4px_rgba(15,23,42,0.15)] group-hover:border-orange-200 group-hover:text-[#FF9F1C]'
+                      }`}
+                    >
+                      <Icon className="w-5.5 h-5.5" />
+                    </span>
+                    <span className={`text-[10px] tracking-wider uppercase font-semibold px-2.5 py-1 rounded-full transition-colors ${
+                      isActive ? 'text-orange-700 bg-orange-50 border border-orange-200' : 'text-slate-500'
+                    }`}>
+                      {label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </>
       )}
@@ -920,7 +950,7 @@ return (
               >
                 {tab === 'tracker' ? (
                   <svg
-                    className={`w-5 h-5 transition-colors ${isSelected ? 'text-[#FF9F1C]' : 'text-slate-400'}`}
+                    className={`w-5 h-5 ${isSelected ? 'text-[#FF9F1C]' : 'text-slate-400'}`}
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2"
@@ -931,9 +961,7 @@ return (
                     <path d="M7 15l4-6 3 3 5-8" />
                   </svg>
                 ) : (
-                  <span className={`transition-colors ${isSelected ? 'text-[#FF9F1C]' : 'text-slate-400'}`}>
-                    <NavGlyph type={tab as Tab} />
-                  </span>
+                  <NavIcon type={tab as Tab} active={isSelected} />
                 )}
               </span>
             </button>
