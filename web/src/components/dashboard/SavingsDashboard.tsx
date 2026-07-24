@@ -33,7 +33,7 @@ import CreateVault from '@/components/vault/CreateVault';
 import NotificationBell from '@/components/shared/NotificationBell';
 import { useToast } from '@/components/shared/Toast';
 import { loadProfile, loadTrustScore, type UserProfile, type TrustScore } from '@/lib/auth/verification';
-import { EyeIcon, SparkleStar, NavIcon, SendIcon, ReceiveIcon } from '@/app/icons';
+import { EyeIcon, SparkleStar, SendIcon, ReceiveIcon } from '@/app/icons';
 import { BudgetProvider } from '@/lib/budgets';
 
 /** currentColor-based glyphs so the active tab's orange color can be set by the wrapper. */
@@ -920,7 +920,7 @@ return (
               >
                 {tab === 'tracker' ? (
                   <svg
-                    className={`w-5 h-5 ${isSelected ? 'text-[#FF9F1C]' : 'text-slate-400'}`}
+                    className={`w-5 h-5 transition-colors ${isSelected ? 'text-[#FF9F1C]' : 'text-slate-400'}`}
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2"
@@ -931,7 +931,9 @@ return (
                     <path d="M7 15l4-6 3 3 5-8" />
                   </svg>
                 ) : (
-                  <NavIcon type={tab as Tab} active={isSelected} />
+                  <span className={`transition-colors ${isSelected ? 'text-[#FF9F1C]' : 'text-slate-400'}`}>
+                    <NavGlyph type={tab as Tab} />
+                  </span>
                 )}
               </span>
             </button>
