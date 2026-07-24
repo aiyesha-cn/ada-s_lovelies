@@ -160,7 +160,8 @@ async function submitAndConfirm(signedXdr: string, operation: TransferOperation,
 async function runTransfer(
   operation: TransferOperation,
   amount: string | number,
-  vaultId: string | number | undefined,
+  onChainVaultId: string | number | undefined,
+  dbVaultId: string | undefined,
   options: TransferOptions = {},
 ): Promise<TransferResult> {
   const normalizedAmount = normalizeAmount(amount);
@@ -178,10 +179,10 @@ async function runTransfer(
 
     if (operation === 'deposit') {
       setState({ status: 'building', message: 'Building deposit transaction…' });
-      xdr = await buildContributeXDR(sender, normalizedAmount, vaultId);
+      xdr = await buildContributeXDR(sender, normalizedAmount, onChainVaultId);
     } else if (operation === 'withdraw') {
       setState({ status: 'building', message: 'Building withdrawal transaction…' });
-      xdr = await buildWithdrawXDR(sender, normalizedAmount, vaultId);
+      xdr = await buildWithdrawXDR(sender, normalizedAmount, onChainVaultId);
     } else {
       if (!options.recipient || !StrKey.isValidEd25519PublicKey(options.recipient)) {
         throw new Error('Please provide a valid Stellar recipient address.');
@@ -193,14 +194,15 @@ async function runTransfer(
 
     setState({ status: 'waiting_for_signature', message: 'Waiting for wallet approval…' });
     const signedXdr = await signXdr(xdr);
-    const hash = await submitAndConfirm(signedXdr, operation, vaultId);
+    const hash = await submitAndConfirm(signedXdr, operation, onChainVaultId);
 
     if (operation === 'deposit' || operation === 'withdraw') {
-      const eventRes = await authFetch(`/api/vaults/${String(vaultId)}/events`, {
+      const eventRes = await authFetch(`/api/vaults/${String(dbVaultId)}/events`, {
         method: 'POST',
         body: JSON.stringify({
           eventType: operation === 'deposit' ? 'deposit' : 'withdraw',
           amount: normalizedAmount,
+          ...(operation === 'withdraw' ? { recipient: sender } : {}),
         }),
       });
       const eventData = await eventRes.json().catch(() => null);
@@ -216,7 +218,7 @@ async function runTransfer(
       amount: normalizedAmount,
       sender,
       recipient: operation === 'transfer' ? options.recipient ?? '' : 'vault',
-      vaultId: operation === 'transfer' ? undefined : vaultId !== undefined ? String(vaultId) : undefined,
+      vaultId: operation === 'transfer' ? undefined : dbVaultId,
       confirmedAt: new Date().toISOString(),
       message: operation === 'deposit'
         ? 'Deposit completed successfully.'
@@ -257,7 +259,7 @@ async function runTransfer(
         : operation === 'withdraw'
           ? `Withdrawal failed: ${message}`
           : `Transfer failed: ${message}`,
-      vaultId: vaultId !== undefined ? String(vaultId) : null,
+      vaultId: dbVaultId ?? null,
       variant: 'error',
       meta: { event: 'transaction_failed', operation, error: message, timestamp: new Date().toISOString() },
     }).catch(() => undefined);
@@ -268,18 +270,20 @@ async function runTransfer(
 
 export async function depositUSDC(
   amount: string | number,
-  vaultId: string | number,
+  onChainVaultId: string | number,
+  dbVaultId: string,
   options: TransferOptions = {},
 ): Promise<TransferResult> {
-  return runTransfer('deposit', amount, vaultId, options);
+  return runTransfer('deposit', amount, onChainVaultId, dbVaultId, options);
 }
 
 export async function withdrawUSDC(
   amount: string | number,
-  vaultId: string | number,
+  onChainVaultId: string | number,
+  dbVaultId: string,
   options: TransferOptions = {},
 ): Promise<TransferResult> {
-  return runTransfer('withdraw', amount, vaultId, options);
+  return runTransfer('withdraw', amount, onChainVaultId, dbVaultId, options);
 }
 
 export async function transferUSDC(
@@ -287,7 +291,7 @@ export async function transferUSDC(
   amount: string | number,
   options: Omit<TransferOptions, 'recipient'> = {},
 ): Promise<TransferResult> {
-  return runTransfer('transfer', amount, undefined, { ...options, recipient });
+  return runTransfer('transfer', amount, undefined, undefined, { ...options, recipient });
 }
 
 export function getTransferState(): TransferState {
