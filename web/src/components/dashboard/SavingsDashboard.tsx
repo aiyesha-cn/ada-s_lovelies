@@ -768,10 +768,10 @@ return (
                     <CreateVault
                       publicKey={publicKey}
                       onCreated={() => {
-                        setPanel(null);
                         showToast('Vault initialized.', 'success');
                         void refresh();
                       }}
+                      onClose={() => setPanel(null)}
                     />
                   </div>
                 )}
