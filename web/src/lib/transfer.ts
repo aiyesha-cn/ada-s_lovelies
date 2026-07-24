@@ -4,6 +4,7 @@ import { buildContributeXDR, buildWithdrawXDR } from './contract';
 import { buildPaymentXDR, pollTransaction, submitSignedXDR } from './payment';
 import { walletService, signWithCurrentAccount, authFetch } from './wallet';
 import { recordHistoryEntry } from './history';
+import { createAppNotification } from './notifications';
 
 export type TransferOperation = 'deposit' | 'withdraw' | 'transfer';
 export type TransferStatus =
@@ -124,18 +125,42 @@ async function signXdr(xdr: string): Promise<string> {
   return signWithCurrentAccount(xdr);
 }
 
-async function submitAndConfirm(signedXdr: string): Promise<string> {
+async function submitAndConfirm(signedXdr: string, operation: TransferOperation, vaultId?: string | number): Promise<string> {
   setState({ status: 'submitting', message: 'Broadcasting transaction…' });
+  await createAppNotification({
+    message: operation === 'deposit'
+      ? 'Deposit transaction submitted to the blockchain.'
+      : operation === 'withdraw'
+        ? 'Withdrawal transaction submitted to the blockchain.'
+        : 'Transfer transaction submitted to the blockchain.',
+    vaultId: vaultId !== undefined ? String(vaultId) : null,
+    variant: 'info',
+    meta: { event: 'transaction_submitted', operation, timestamp: new Date().toISOString() },
+  }).catch(() => undefined);
+
   const hash = await submitSignedXDR(signedXdr);
   setState({ status: 'pending_confirmation', message: 'Waiting for confirmation…' });
   await pollTransaction(hash);
+
+  await createAppNotification({
+    message: operation === 'deposit'
+      ? 'Deposit transaction confirmed on-chain.'
+      : operation === 'withdraw'
+        ? 'Withdrawal transaction confirmed on-chain.'
+        : 'Transfer transaction confirmed on-chain.',
+    vaultId: vaultId !== undefined ? String(vaultId) : null,
+    variant: 'success',
+    meta: { event: 'transaction_confirmed', operation, hash, timestamp: new Date().toISOString() },
+  }).catch(() => undefined);
+
   return hash;
 }
 
 async function runTransfer(
   operation: TransferOperation,
   amount: string | number,
-  vaultId: string | number | undefined,
+  onChainVaultId: string | number | undefined,
+  dbVaultId: string | undefined,
   options: TransferOptions = {},
 ): Promise<TransferResult> {
   const normalizedAmount = normalizeAmount(amount);
@@ -153,10 +178,10 @@ async function runTransfer(
 
     if (operation === 'deposit') {
       setState({ status: 'building', message: 'Building deposit transaction…' });
-      xdr = await buildContributeXDR(sender, normalizedAmount, vaultId);
+      xdr = await buildContributeXDR(sender, normalizedAmount, onChainVaultId);
     } else if (operation === 'withdraw') {
       setState({ status: 'building', message: 'Building withdrawal transaction…' });
-      xdr = await buildWithdrawXDR(sender, normalizedAmount, vaultId);
+      xdr = await buildWithdrawXDR(sender, normalizedAmount, onChainVaultId);
     } else {
       if (!options.recipient || !StrKey.isValidEd25519PublicKey(options.recipient)) {
         throw new Error('Please provide a valid Stellar recipient address.');
@@ -168,7 +193,22 @@ async function runTransfer(
 
     setState({ status: 'waiting_for_signature', message: 'Waiting for wallet approval…' });
     const signedXdr = await signXdr(xdr);
-    const hash = await submitAndConfirm(signedXdr);
+    const hash = await submitAndConfirm(signedXdr, operation, onChainVaultId);
+
+    if (operation === 'deposit' || operation === 'withdraw') {
+      const eventRes = await authFetch(`/api/vaults/${String(dbVaultId)}/events`, {
+        method: 'POST',
+        body: JSON.stringify({
+          eventType: operation === 'deposit' ? 'deposit' : 'withdraw',
+          amount: normalizedAmount,
+          ...(operation === 'withdraw' ? { recipient: sender } : {}),
+        }),
+      });
+      const eventData = await eventRes.json().catch(() => null);
+      if (!eventRes.ok) {
+        throw new Error(eventData?.error ?? 'Vault update failed after the transaction confirmed.');
+      }
+    }
 
     const result: TransferResult = {
       hash,
@@ -177,7 +217,7 @@ async function runTransfer(
       amount: normalizedAmount,
       sender,
       recipient: operation === 'transfer' ? options.recipient ?? '' : 'vault',
-      vaultId: operation === 'transfer' ? undefined : vaultId !== undefined ? String(vaultId) : undefined,
+      vaultId: operation === 'transfer' ? undefined : dbVaultId,
       confirmedAt: new Date().toISOString(),
       message: operation === 'deposit'
         ? 'Deposit completed successfully.'
@@ -212,6 +252,16 @@ async function runTransfer(
     return result;
   } catch (error) {
     const message = formatError(error);
+    await createAppNotification({
+      message: operation === 'deposit'
+        ? `Deposit failed: ${message}`
+        : operation === 'withdraw'
+          ? `Withdrawal failed: ${message}`
+          : `Transfer failed: ${message}`,
+      vaultId: dbVaultId ?? null,
+      variant: 'error',
+      meta: { event: 'transaction_failed', operation, error: message, timestamp: new Date().toISOString() },
+    }).catch(() => undefined);
     setState({ status: 'failed', message, error: message, result: null });
     throw new Error(message);
   }
@@ -219,18 +269,20 @@ async function runTransfer(
 
 export async function depositUSDC(
   amount: string | number,
-  vaultId: string | number,
+  onChainVaultId: string | number,
+  dbVaultId: string,
   options: TransferOptions = {},
 ): Promise<TransferResult> {
-  return runTransfer('deposit', amount, vaultId, options);
+  return runTransfer('deposit', amount, onChainVaultId, dbVaultId, options);
 }
 
 export async function withdrawUSDC(
   amount: string | number,
-  vaultId: string | number,
+  onChainVaultId: string | number,
+  dbVaultId: string,
   options: TransferOptions = {},
 ): Promise<TransferResult> {
-  return runTransfer('withdraw', amount, vaultId, options);
+  return runTransfer('withdraw', amount, onChainVaultId, dbVaultId, options);
 }
 
 export async function transferUSDC(
@@ -238,7 +290,7 @@ export async function transferUSDC(
   amount: string | number,
   options: Omit<TransferOptions, 'recipient'> = {},
 ): Promise<TransferResult> {
-  return runTransfer('transfer', amount, undefined, { ...options, recipient });
+  return runTransfer('transfer', amount, undefined, undefined, { ...options, recipient });
 }
 
 export function getTransferState(): TransferState {

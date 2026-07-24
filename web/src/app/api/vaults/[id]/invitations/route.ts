@@ -8,7 +8,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = verifyAuth(request)
+    const auth = await verifyAuth(request)
 
     if (!auth) {
       return Response.json({ error: "Unauthorized" }, { status: 401 })
@@ -49,6 +49,12 @@ export async function POST(
       data: {
         pubkey: inviteePubkey,
         message: `You've been invited to join the vault "${vault.name}"`,
+        vaultId: vault.id,
+        variant: "action_required",
+        meta: {
+          event: "vault_invitation",
+          vaultName: vault.name,
+        },
       }
     })
 
@@ -66,5 +72,36 @@ export async function POST(
       { error: "Failed to create invitation" },
       { status: 500 }
     )
+  }
+}
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const auth = await verifyAuth(request)
+    if (!auth) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const { id: vaultId } = await params
+    const vault = await prisma.vault.findUnique({ where: { id: vaultId } })
+    if (!vault) {
+      return Response.json({ error: "Vault not found" }, { status: 404 })
+    }
+    if (vault.ownerPubkey !== auth.pubkey) {
+      return Response.json({ error: "Only the vault owner can view invitations" }, { status: 403 })
+    }
+
+    const invitations = await prisma.invitation.findMany({
+      where: { vaultId },
+      orderBy: { createdAt: "desc" },
+    })
+
+    return Response.json(invitations)
+  } catch (error) {
+    console.error("Vault invitations fetch error:", error)
+    return Response.json({ error: "Failed to fetch invitations" }, { status: 500 })
   }
 }

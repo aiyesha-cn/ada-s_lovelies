@@ -2,53 +2,24 @@ import "dotenv/config"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth } from "@/lib/verifyAuth"
 import { logActivity } from "@/lib/logActivity"
+import { createNotification, notifyVaultMembers } from "@/lib/notificationHelpers"
 import { Prisma } from "@prisma/client"
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const auth = verifyAuth(request)
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await verifyAuth(request);
+  if (!auth) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-    if (!auth) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 })
-    }
+  const { id: vaultId } = await params;
+  const isMember = await prisma.vaultMember.findUnique({
+    where: { vaultId_pubkey: { vaultId, pubkey: auth.pubkey } },
+  });
+  if (!isMember) return Response.json({ error: "Not a member of this vault" }, { status: 403 });
 
-    const { id: vaultId } = await params
-
-    const vault = await prisma.vault.findUnique({
-      where: { id: vaultId }
-    })
-
-    if (!vault) {
-      return Response.json({ error: "Vault not found" }, { status: 404 })
-    }
-
-    const isMember = await prisma.vaultMember.findUnique({
-      where: { vaultId_pubkey: { vaultId, pubkey: auth.pubkey } }
-    })
-
-    if (!isMember) {
-      return Response.json(
-        { error: "You do not have access to this vault's members" },
-        { status: 403 }
-      )
-    }
-
-    const members = await prisma.vaultMember.findMany({
-      where: { vaultId },
-      orderBy: { addedAt: "asc" }
-    })
-
-    return Response.json(members)
-  } catch (error) {
-    console.error("Member list error:", error)
-    return Response.json(
-      { error: "Failed to fetch members" },
-      { status: 500 }
-    )
-  }
+  const members = await prisma.vaultMember.findMany({
+    where: { vaultId },
+    orderBy: { addedAt: "asc" },
+  });
+  return Response.json(members);
 }
 
 export async function POST(
@@ -56,7 +27,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = verifyAuth(request)
+    const auth = await verifyAuth(request)
 
     if (!auth) {
       return Response.json({ error: "Unauthorized" }, { status: 401 })
@@ -92,11 +63,10 @@ export async function POST(
       )
     }
 
-    await prisma.user.upsert({
-      where: { pubkey },
-      update: {},
-      create: { pubkey },
-    })
+    const memberUser = await prisma.user.findUnique({ where: { pubkey } })
+    if (!memberUser || memberUser.deletedAt) {
+      return Response.json({ error: "This pubkey has no active user account" }, { status: 404 })
+    }
 
     const member = await prisma.vaultMember.create({
       data: {
@@ -111,6 +81,33 @@ export async function POST(
       action: "member_added",
       vaultId,
       detail: `${pubkey} confirmed as a member of "${vault.name}"`,
+    })
+
+    const timestamp = new Date().toISOString()
+
+    await createNotification({
+      pubkey,
+      vaultId,
+      message: `You were added as a member of collaborative vault "${vault.name}".`,
+      variant: "success",
+      meta: {
+        event: "member_added",
+        vaultName: vault.name,
+        timestamp,
+      },
+    })
+
+    await notifyVaultMembers({
+      vaultId,
+      excludePubkeys: [pubkey],
+      message: `A new member joined collaborative vault "${vault.name}".`,
+      variant: "info",
+      meta: {
+        event: "member_joined",
+        newMemberPubkey: pubkey,
+        vaultName: vault.name,
+        timestamp,
+      },
     })
 
     return Response.json(member, { status: 201 })

@@ -2,6 +2,7 @@ import "dotenv/config"
 import { prisma } from "@/lib/prisma"
 import { verifyAuth } from "@/lib/verifyAuth"
 import { logActivity } from "@/lib/logActivity"
+import { createNotification } from "@/lib/notificationHelpers"
 import { Prisma } from "@prisma/client"
 
 function serializeVault(vault: { onChainVaultId: bigint; [key: string]: unknown }) {
@@ -10,7 +11,7 @@ function serializeVault(vault: { onChainVaultId: bigint; [key: string]: unknown 
 
 export async function GET(request: Request) {
   try {
-    const auth = verifyAuth(request)
+    const auth = await verifyAuth(request)
 
     if (!auth) {
       return Response.json({ error: "Unauthorized" }, { status: 401 })
@@ -33,7 +34,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const auth = verifyAuth(request)
+    const auth = await verifyAuth(request)
 
     if (!auth) {
       return Response.json({ error: "Unauthorized" }, { status: 401 })
@@ -80,11 +81,13 @@ export async function POST(request: Request) {
       )
     }
 
-    await prisma.user.upsert({
-      where: { pubkey: ownerPubkey },
-      update: {},
-      create: { pubkey: ownerPubkey },
-    })
+    const owner = await prisma.user.findUnique({ where: { pubkey: ownerPubkey } })
+    if (!owner) {
+      return Response.json(
+        { error: "Owner has no registered user account yet" },
+        { status: 404 }
+      )
+    }
 
     const vault = await prisma.vault.create({
       data: {
@@ -113,6 +116,18 @@ export async function POST(request: Request) {
         pubkey: ownerPubkey,
         role: "Owner",
       }
+    })
+
+    await createNotification({
+      pubkey: ownerPubkey,
+      vaultId: vault.id,
+      message: `${vault.vaultType === 'Collaborative' ? 'Collaborative' : 'Personal'} vault "${vault.name}" created successfully.`,
+      variant: "success",
+      meta: {
+        event: "vault_created",
+        vaultName: vault.name,
+        targetAmount: vault.targetAmount,
+      },
     })
 
     return Response.json(serializeVault(vault), { status: 201 })

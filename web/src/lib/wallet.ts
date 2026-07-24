@@ -2,8 +2,9 @@
 
 import { generateKeypair, keypairFromSecret, fundTestnetAccount, NETWORK_PASSPHRASE } from '@/lib/stellar';
 import { encryptSecretKey, decryptSecretKey } from '@/lib/auth/encryption';
-import { saveAccount, loadAccount } from '@/lib/auth/storage';
+import { saveAccount, loadAccount, clearAccount } from '@/lib/auth/storage';
 import { TransactionBuilder } from '@stellar/stellar-sdk';
+import { recoverAndStoreAccount } from "@/lib/auth/recovery";
 
 export type WalletStatus =
   | 'disconnected'
@@ -242,14 +243,15 @@ async function authenticateWithFreighter(address: string): Promise<string> {
 export async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
   const token = currentSnapshot.authToken;
   const headers = new Headers(options.headers);
-  headers.set('Content-Type', 'application/json');
+  if (!(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
   const res = await fetch(path, { ...options, headers });
 
-  // Token expired or invalid — clear it so the UI can prompt re-auth.
   if (res.status === 401) {
     setSnapshot({ authToken: null });
     persistSnapshot(currentSnapshot);
@@ -427,10 +429,6 @@ async function connectWallet(): Promise<void> {
     persistSnapshot(nextSnapshot);
     emit();
 
-    currentSnapshot = nextSnapshot;
-    persistSnapshot(nextSnapshot);
-    emit();
-
     await ensureUserExists(address); // NEW
 
   } catch (error) {
@@ -458,6 +456,7 @@ async function disconnectWallet(): Promise<void> {
   setSnapshot({ status: 'disconnecting', error: null });
   currentSecretKey = null;
   clearStoredSnapshot();
+  clearAccount();
   currentSnapshot = { ...defaultSnapshot };
   emit();
 }
@@ -481,12 +480,18 @@ function getSnapshot(): WalletSnapshot {
 /* PIN account creation / unlock                                          */
 /* ---------------------------------------------------------------------- */
 
-/** Creates a new PIN-protected account and authenticates it. Returns the new public key. */
-export async function createPinAccount(pin: string): Promise<string> {
+/**
+ * Creates a new PIN-protected account and authenticates it.
+ * Returns the new public key AND the BIP-39 mnemonic the keypair was
+ * derived from, so the caller (CreateAccount.tsx) can show it to the user
+ * exactly once via RecoveryPhrase. The mnemonic is never persisted here —
+ * only the caller holds it in memory for the duration of that confirmation step.
+ */
+export async function createPinAccount(pin: string): Promise<{ publicKey: string; mnemonic: string }> {
   setSnapshot({ status: 'connecting', error: null });
 
   try {
-    const { publicKey, secretKey } = generateKeypair();
+    const { publicKey, secretKey, mnemonic } = generateKeypair();
     currentSecretKey = secretKey;
     const encryptedData = await encryptSecretKey(secretKey, pin);
 
@@ -516,15 +521,9 @@ export async function createPinAccount(pin: string): Promise<string> {
     persistSnapshot(nextSnapshot);
     emit();
 
-    currentSnapshot = nextSnapshot;
-    persistSnapshot(nextSnapshot);
-    emit();
-
     await ensureUserExists(publicKey); // NEW
 
-    return publicKey;
-
-    return publicKey; // FIX: caller (CreateAccount.tsx) needs this back
+    return { publicKey, mnemonic };
   } catch (error) {
     clearStoredSnapshot();
     setSnapshot({
@@ -539,7 +538,46 @@ export async function createPinAccount(pin: string): Promise<string> {
       isConnected: false,
       authToken: null,
     });
-    throw error; // FIX: rethrow so callers' try/catch actually fires
+    throw error; // rethrow so callers' try/catch actually fires
+  }
+}
+
+export async function recoverPinAccount(mnemonic: string, pin: string): Promise<{ publicKey: string }> {
+  setSnapshot({ status: 'connecting', error: null });
+
+  try {
+    const { publicKey, secretKey } = await recoverAndStoreAccount(mnemonic, pin);
+    currentSecretKey = secretKey;
+
+    const token = await authenticateWithSecretKey(secretKey);
+
+    const nextSnapshot: WalletSnapshot = {
+      address: publicKey,
+      publicKey,
+      network: 'testnet',
+      provider: 'passkey',
+      signerAvailable: true,
+      status: 'ready',
+      initialized: true,
+      error: null,
+      isConnected: true,
+      authToken: token,
+    };
+
+    currentSnapshot = nextSnapshot;
+    persistSnapshot(nextSnapshot);
+    emit();
+
+    await ensureUserExists(publicKey);
+
+    return { publicKey };
+  } catch (error) {
+    setSnapshot({
+      status: 'error',
+      error: getErrorMessage(error),
+      authToken: null,
+    });
+    throw error;
   }
 }
 
@@ -575,10 +613,6 @@ export async function unlockPinAccount(pin: string): Promise<void> {
     persistSnapshot(nextSnapshot);
     emit();
 
-    currentSnapshot = nextSnapshot;
-    persistSnapshot(nextSnapshot);
-    emit();
-
     await ensureUserExists(stored.publicKey); // NEW
 
   } catch (error) {
@@ -587,7 +621,7 @@ export async function unlockPinAccount(pin: string): Promise<void> {
       error: getErrorMessage(error),
       authToken: null,
     });
-    throw error; // FIX: this was missing — wrong PINs were silently succeeding
+    throw error; // this was missing — wrong PINs were silently succeeding
   }
 }
 
@@ -619,6 +653,7 @@ if (typeof window !== 'undefined') {
     };
     emit();
   }
+
 
   void reconnectWithStoredSession();
 }

@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { CreateAccount } from '@/components/auth/CreateAccount';
-import { saveProfile } from '@/lib/auth/verification';
 import { authFetch } from '@/lib/wallet';
 
 type OnboardStep = 'intro' | 'pin' | 'profile' | 'otp' | 'done';
@@ -43,7 +42,6 @@ export default function RegisterPage() {
   const [otpCode, setOtpCode] = useState('');
   const [otpError, setOtpError] = useState('');
   const [otpLoading, setOtpLoading] = useState(false);
-  const [demoOtp, setDemoOtp] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
 
   function handleAccountCreated(key: string) {
@@ -59,22 +57,34 @@ export default function RegisterPage() {
     reader.readAsDataURL(file);
   }
 
-  function generateAndSendOtp() {
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    setDemoOtp(code);
+  async function generateAndSendOtp() {
     setResendCooldown(RESEND_COOLDOWN);
+    setOtpError('');
+    try {
+      const res = await fetch('/api/otp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: `63${phone}` }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json();
+        setOtpError(error || 'Failed to send code. Try again.');
+      }
+    } catch {
+      setOtpError('Network error sending code.');
+    }
   }
 
-  function handleProfileSubmit() {
+  async function handleProfileSubmit() {
     if (!displayName.trim()) return setProfileError('Display name is required');
     if (!phone.trim() || phone.length < 10) return setProfileError('A valid mobile number is required');
     if (!tosAccepted) return setProfileError('Please accept the terms to continue');
     setProfileError('');
 
-    generateAndSendOtp();
     setOtpCode('');
     setOtpError('');
     setStep('otp');
+    await generateAndSendOtp();
   }
 
   function handleOtpDigit(digit: string) {
@@ -97,30 +107,25 @@ export default function RegisterPage() {
   }
 
   async function finishOtpVerification() {
-    if (otpCode !== demoOtp) {
-      setOtpError('Incorrect code. Please try again.');
-      setOtpCode('');
-      setOtpLoading(false);
-      return;
-    }
-
-    saveProfile({
-      displayName: displayName.trim(),
-      country,
-      phoneNumber: phone,
-      phoneVerified: true,
-      tosAccepted: true,
-      email: email || undefined,
-      verificationLevel: 0,
-      createdAt: new Date().toISOString(),
-    });
-
     try {
+      const res = await fetch('/api/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: `63${phone}`, code: otpCode }),
+      });
+
+      if (!res.ok) {
+        setOtpError('Incorrect code. Please try again.');
+        setOtpCode('');
+        setOtpLoading(false);
+        return;
+      }
       await authFetch('/api/users', {
         method: 'POST',
         body: JSON.stringify({
           pubkey: publicKey,
           username: displayName.trim(),
+          avatarUrl: profilePicture ?? undefined,
         }),
       });
     } catch {
@@ -151,9 +156,9 @@ export default function RegisterPage() {
     <main className="min-h-screen w-full bg-[#FAF8F5] text-slate-700 antialiased flex items-center justify-center py-6 px-4">
       {/* Structural Phone Container Frame */}
       <div className="w-full max-w-sm min-h-[820px] bg-[#FAF8F5] flex flex-col justify-between font-sans px-2 py-4">
-        
+
         <div className="flex-1 flex flex-col justify-center">
-          
+
           {/* Global Multi-step Progress Bar Indicator */}
           {step !== 'intro' && step !== 'done' && (
             <div className="flex gap-2 mb-8 px-1 w-full max-w-xs mx-auto">
@@ -171,13 +176,13 @@ export default function RegisterPage() {
           {/* INTRO STEP */}
           {step === 'intro' && (
             <div className="space-y-8 flex flex-col items-center">
-              
+
               {/* Premium Floating Graphic Deck */}
               <div className="w-full relative px-2 max-w-[290px] mx-auto rounded-3xl overflow-hidden bg-[#FAF8F5] shadow-xs border border-amber-100/20">
                 <div className="absolute inset-0 bg-gradient-to-b from-amber-50/20 to-transparent pointer-events-none" />
-                <img 
-                  src="stellamascot.png" 
-                  alt="STELLA Mascot Vault" 
+                <img
+                  src="stellamascot.png"
+                  alt="STELLA Mascot Vault"
                   className="w-full h-auto object-contain mx-auto drop-shadow-[0_8px_24px_rgba(255,159,28,0.12)]"
                 />
               </div>
@@ -200,40 +205,13 @@ export default function RegisterPage() {
                 >
                   Sign up
                 </button>
-                
+
                 <button
                   onClick={() => router.push('/login')}
                   className="w-full bg-white border border-amber-100/60 text-slate-600 rounded-xl py-3.5 text-sm font-medium tracking-wide hover:bg-amber-50/10 active:scale-98 transition-all"
                 >
                   Log in
                 </button>
-              </div>
-
-              {/* Grid Feature Matrix Nodes */}
-              <div className="w-full max-w-xs grid grid-cols-2 gap-3 px-2 pt-2">
-                <div className="bg-white border border-amber-100/20 p-3.5 rounded-xl flex flex-col justify-between space-y-1 shadow-xs">
-                  <div className="text-[#FF9F1C]">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h4 className="text-[11px] font-semibold text-slate-700">Quick Setup</h4>
-                    <p className="text-[10px] font-normal text-slate-400 mt-0.5">Ready in 2 mins</p>
-                  </div>
-                </div>
-
-                <div className="bg-white border border-amber-100/20 p-3.5 rounded-xl flex flex-col justify-between space-y-1 shadow-xs">
-                  <div className="text-[#FF9F1C]">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879-.659c1.546-1.16 2.699-2.74 3.62-4.476C14.805 7.9 14.15 6 12 6c-1.34 0-2.344.664-2.88 1.636" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h4 className="text-[11px] font-semibold text-slate-700">High Yield</h4>
-                    <p className="text-[10px] font-normal text-slate-400 mt-0.5">Grow your funds</p>
-                  </div>
-                </div>
               </div>
             </div>
           )}
@@ -300,7 +278,7 @@ export default function RegisterPage() {
                   <label className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Phone number</label>
                   <div className="flex gap-2">
                     <span className="border border-slate-200 rounded-xl px-3 py-3 text-xs font-medium bg-slate-50 text-slate-500 flex items-center">
-                      ðŸ‡µðŸ‡­ +63
+                      +63
                     </span>
                     <input
                       type="tel"
@@ -345,12 +323,7 @@ export default function RegisterPage() {
             <div className="w-full max-w-xs mx-auto space-y-6 animate-fade-in">
               <div className="text-center space-y-1">
                 <h3 className="text-lg font-semibold text-slate-800 tracking-tight">Verify number</h3>
-                <p className="text-xs font-normal text-slate-400">Sent a verification payload to +63 {phone}</p>
-              </div>
-
-              <div className="bg-cyan-50/50 border border-cyan-100/50 rounded-xl py-2 px-4 text-center">
-                <p className="text-[9px] font-semibold text-cyan-700 uppercase tracking-widest font-mono">Demo payload code</p>
-                <p className="text-base font-semibold tracking-widest text-cyan-800 font-mono mt-0.5">{demoOtp}</p>
+                <p className="text-xs font-normal text-slate-400">Sent a verification code to +63 {phone}</p>
               </div>
 
               {/* Status Indicators */}
@@ -369,20 +342,24 @@ export default function RegisterPage() {
                 ))}
               </div>
 
+              {otpError && (
+                <p className="text-red-500 text-[11px] text-center font-medium bg-red-50/60 border border-red-100/50 rounded-xl py-2 px-3">{otpError}</p>
+              )}
+
               {/* Grid Number Input Pad Layout */}
               <div className="grid grid-cols-3 gap-x-4 gap-y-3 px-2">
-                {['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'âŒ«'].map((key, idx) => (
+                {['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'].map((key, idx) => (
                   <button
                     key={idx}
                     onClick={() => {
-                      if (key === 'âŒ«') handleOtpBackspace();
+                      if (key === '⌫') handleOtpBackspace();
                       else if (key !== '') handleOtpDigit(key);
                     }}
                     disabled={key === '' || otpLoading}
                     className={`h-11 rounded-xl text-base font-medium flex items-center justify-center transition-all ${
                       key === ''
                         ? 'opacity-0 pointer-events-none'
-                        : key === 'âŒ«'
+                        : key === '⌫'
                         ? 'text-slate-400 active:scale-95'
                         : 'bg-white border border-amber-100/30 text-slate-600 active:scale-95'
                     }`}
@@ -427,7 +404,7 @@ export default function RegisterPage() {
         {/* Brand System Footer Deck Layout */}
         <div className="flex flex-col items-center space-y-4 pt-12">
           <span className="text-[10px] font-normal text-slate-400 tracking-normal">
-            Â© 2026 Team Ada's Lovelies. All rights reserved.
+            © 2026 Team Ada's Lovelies. All rights reserved.
           </span>
         </div>
 

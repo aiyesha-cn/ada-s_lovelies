@@ -10,12 +10,13 @@ import {
   scValToNative,
   xdr,
 } from '@stellar/stellar-sdk';
-import { server, NETWORK_PASSPHRASE, CONTRACT_ID, USDC_ISSUER, USDC_CONTRACT_ID } from './stellar';
+import { server, NETWORK_PASSPHRASE, CONTRACT_ID, USDC_ISSUER, USDC_CONTRACT_ID} from './stellar';
 
 // A real, funded testnet account used ONLY as the source for read-only
 // simulations. Nothing is signed or submitted for reads, so any existing
 // account works — we reuse the Circle USDC issuer.
 const READ_SOURCE = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
+const STROOPS_PER_UNIT = 10_000_000; // SAC tokens use 7 decimal places, same as XLM
 
 export interface CreateVaultParams {
   creator: string;
@@ -53,7 +54,7 @@ export async function buildCreateVaultXDR(params: CreateVaultParams): Promise<st
         nativeToScVal(Address.fromString(tokenAddress), { type: 'address' }),    // token
         xdr.ScVal.scvVec([xdr.ScVal.scvSymbol(vaultType)]),                       // vault_type
         nativeToScVal(purpose, { type: 'string' }),                              // purpose
-        nativeToScVal(BigInt(Math.trunc(goalAmount)), { type: 'i128' }),         // goal_amount
+        nativeToScVal(BigInt(Math.round(goalAmount * STROOPS_PER_UNIT)), { type: 'i128' }), // goal_amount
         nativeToScVal(BigInt(Math.trunc(lockUntil)), { type: 'u64' }),          // lock_until
       ),
     )
@@ -87,6 +88,25 @@ export interface VaultBalanceSummary {
   lockLabel: string;
 }
 
+export interface VaultMemberInfo {
+  address: string;
+  role: string;
+  shareBps: number;
+}
+
+export async function readListMembers(vaultId: string | number): Promise<VaultMemberInfo[]> {
+  const resolvedVaultId = resolveVaultId(vaultId);
+  const raw = (await readScVal('list_members', [
+    nativeToScVal(BigInt(resolvedVaultId), { type: 'u64' }),
+  ])) as Array<Record<string, unknown>>;
+
+  return raw.map((m) => ({
+    address: (m.address as { toString: () => string })?.toString?.() ?? String(m.address),
+    role: normalizeEnum(m.role),
+    shareBps: toNumber(m.share_bps),
+  }));
+}
+
 export function contractConfigured(): boolean {
   return Boolean(CONTRACT_ID);
 }
@@ -117,6 +137,7 @@ function toNumber(value: unknown): number {
 
 function normalizeEnum(value: unknown): string {
   if (typeof value === 'string') return value;
+  if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
   if (value && typeof value === 'object') {
     const record = value as Record<string, unknown>;
     if (typeof record.tag === 'string') return record.tag;
@@ -171,8 +192,8 @@ export async function readVaultBalanceSummary(
   try {
     const id = BigInt(resolvedVaultId);
     const vaultData = (await readScVal('get_vault', [nativeToScVal(id, { type: 'u64' })])) as Record<string, unknown>;
-    const balance = toNumber(vaultData.balance);
-    const goalAmount = Math.max(toNumber(vaultData.goal_amount), 1);
+    const balance = toNumber(vaultData.balance) / STROOPS_PER_UNIT;
+    const goalAmount = Math.max(toNumber(vaultData.goal_amount) / STROOPS_PER_UNIT, 1);
     const lockUntil = toNumber(vaultData.lock_until);
     const status = normalizeEnum(vaultData.status);
     const vaultType = normalizeEnum(vaultData.vault_type);
@@ -187,7 +208,7 @@ export async function readVaultBalanceSummary(
           nativeToScVal(id, { type: 'u64' }),
           nativeToScVal(Address.fromString(address), { type: 'address' }),
         ]);
-        contribution = toNumber(contributionData);
+        contribution = toNumber(contributionData) / STROOPS_PER_UNIT;
       } catch {
         contribution = 0;
       }
@@ -238,7 +259,7 @@ export async function buildContributeXDR(
         'deposit',
         nativeToScVal(Address.fromString(sender), { type: 'address' }),
         nativeToScVal(BigInt(resolvedVaultId), { type: 'u64' }),
-        nativeToScVal(BigInt(Math.trunc(amount)), { type: 'i128' }),
+        nativeToScVal(BigInt(Math.round(amount * STROOPS_PER_UNIT)), { type: 'i128' }),
       ),
     )
     .setTimeout(30)
@@ -272,7 +293,7 @@ export async function buildWithdrawXDR(
         nativeToScVal(Address.fromString(sender), { type: 'address' }),
         nativeToScVal(BigInt(resolvedVaultId), { type: 'u64' }),
         nativeToScVal(Address.fromString(sender), { type: 'address' }),
-        nativeToScVal(BigInt(Math.trunc(amount)), { type: 'i128' }),
+        nativeToScVal(BigInt(Math.round(amount * STROOPS_PER_UNIT)), { type: 'i128' }),
       ),
     )
     .setTimeout(30)
@@ -281,6 +302,197 @@ export async function buildWithdrawXDR(
   const sim = await server.simulateTransaction(tx);
   if (!rpc.Api.isSimulationSuccess(sim)) {
     throw new Error('Simulation failed — the withdraw call would not succeed.');
+  }
+
+  return rpc.assembleTransaction(tx, sim).build().toXDR();
+}
+
+export async function buildAddMemberXDR(
+  owner: string,
+  vaultId: string | number,
+  member: string,
+  shareBps: number,
+): Promise<string> {
+  const contract = new Contract(CONTRACT_ID);
+  const account = await server.getAccount(owner);
+  const resolvedVaultId = resolveVaultId(vaultId);
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call(
+        'add_member',
+        nativeToScVal(Address.fromString(owner), { type: 'address' }),
+        nativeToScVal(BigInt(resolvedVaultId), { type: 'u64' }),
+        nativeToScVal(Address.fromString(member), { type: 'address' }),
+        nativeToScVal(shareBps, { type: 'u32' }),
+      ),
+    )
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(sim)) {
+    throw new Error('Simulation failed — the add_member call would not succeed.');
+  }
+
+  return rpc.assembleTransaction(tx, sim).build().toXDR();
+}
+
+export async function buildDistributeXDR(
+  owner: string,
+  vaultId: string | number,
+): Promise<string> {
+  const contract = new Contract(CONTRACT_ID);
+  const account = await server.getAccount(owner);
+  const resolvedVaultId = resolveVaultId(vaultId);
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call(
+        'distribute',
+        nativeToScVal(Address.fromString(owner), { type: 'address' }),
+        nativeToScVal(BigInt(resolvedVaultId), { type: 'u64' }),
+      ),
+    )
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(sim)) {
+    throw new Error('Simulation failed — the distribute call would not succeed.');
+  }
+
+  return rpc.assembleTransaction(tx, sim).build().toXDR();
+}
+
+export async function buildUpdateGoalXDR(
+  owner: string,
+  vaultId: string | number,
+  newGoalAmount: number,
+): Promise<string> {
+  const contract = new Contract(CONTRACT_ID);
+  const account = await server.getAccount(owner);
+  const resolvedVaultId = resolveVaultId(vaultId);
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call(
+        'update_goal',
+        nativeToScVal(Address.fromString(owner), { type: 'address' }),
+        nativeToScVal(BigInt(resolvedVaultId), { type: 'u64' }),
+        nativeToScVal(BigInt(Math.round(newGoalAmount * STROOPS_PER_UNIT)), { type: 'i128' }),
+      ),
+    )
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(sim)) {
+    throw new Error('Simulation failed — the update_goal call would not succeed.');
+  }
+
+  return rpc.assembleTransaction(tx, sim).build().toXDR();
+}
+
+export async function buildUpdateLockXDR(
+  owner: string,
+  vaultId: string | number,
+  newLockUntil: number,
+): Promise<string> {
+  const contract = new Contract(CONTRACT_ID);
+  const account = await server.getAccount(owner);
+  const resolvedVaultId = resolveVaultId(vaultId);
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call(
+        'update_lock',
+        nativeToScVal(Address.fromString(owner), { type: 'address' }),
+        nativeToScVal(BigInt(resolvedVaultId), { type: 'u64' }),
+        nativeToScVal(BigInt(Math.trunc(newLockUntil)), { type: 'u64' }),
+      ),
+    )
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(sim)) {
+    throw new Error('Simulation failed — the update_lock call would not succeed.');
+  }
+
+  return rpc.assembleTransaction(tx, sim).build().toXDR();
+}
+
+/** caller can be the owner removing someone else, or a member removing themselves. */
+export async function buildRemoveMemberXDR(
+  caller: string,
+  vaultId: string | number,
+  member: string,
+): Promise<string> {
+  const contract = new Contract(CONTRACT_ID);
+  const account = await server.getAccount(caller);
+  const resolvedVaultId = resolveVaultId(vaultId);
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call(
+        'remove_member',
+        nativeToScVal(Address.fromString(caller), { type: 'address' }),
+        nativeToScVal(BigInt(resolvedVaultId), { type: 'u64' }),
+        nativeToScVal(Address.fromString(member), { type: 'address' }),
+      ),
+    )
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(sim)) {
+    throw new Error('Simulation failed — the remove_member call would not succeed.');
+  }
+
+  return rpc.assembleTransaction(tx, sim).build().toXDR();
+}
+
+export async function buildCloseVaultXDR(
+  owner: string,
+  vaultId: string | number,
+): Promise<string> {
+  const contract = new Contract(CONTRACT_ID);
+  const account = await server.getAccount(owner);
+  const resolvedVaultId = resolveVaultId(vaultId);
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call(
+        'close_vault',
+        nativeToScVal(Address.fromString(owner), { type: 'address' }),
+        nativeToScVal(BigInt(resolvedVaultId), { type: 'u64' }),
+      ),
+    )
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (!rpc.Api.isSimulationSuccess(sim)) {
+    throw new Error('Simulation failed — the close_vault call would not succeed.');
   }
 
   return rpc.assembleTransaction(tx, sim).build().toXDR();
