@@ -14,6 +14,12 @@ interface VaultZoneProps {
   walletUsdcBalance: number;
   panel: Panel;
   setPanel: (panel: Panel) => void;
+  goalProgress: number;
+  vaultLevel: number;
+  vaultName?: string;
+  targetLabel?: string;
+  members?: { id: string; initial: string; color?: string }[];
+  onViewVaultDetails?: () => void;
 }
 
 export default function VaultZone({
@@ -24,6 +30,12 @@ export default function VaultZone({
   walletUsdcBalance,
   panel,
   setPanel,
+  goalProgress,
+  vaultLevel,
+  vaultName,
+  targetLabel,
+  members,
+  onViewVaultDetails,
 }: VaultZoneProps) {
   return (
     <div className="mx-6 mt-6 space-y-5">
@@ -99,7 +111,14 @@ export default function VaultZone({
       </div>
 
       <div className="mt-8 mb-6 flex flex-col items-center">
-        <VaultCore goalProgress={72} vaultLevel={3} />
+        <VaultCore
+          goalProgress={goalProgress}
+          vaultLevel={vaultLevel}
+          vaultName={vaultName}
+          targetLabel={targetLabel}
+          members={members}
+          onViewDetails={onViewVaultDetails}
+        />
       </div>
     </div>
   );
