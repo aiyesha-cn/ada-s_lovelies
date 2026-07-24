@@ -167,6 +167,49 @@ function DonutChart({ segments }: { segments: { label: string; value: number; co
   );
 }
 
+const MONTH_PALETTE = ['#FF9F1C', '#00A3A3', '#6366F1', '#EC4899', '#10B981', '#F59E0B'];
+
+function BarChartIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 20V10M12 20V4M20 20v-7" />
+    </svg>
+  );
+}
+
+function PieChartIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v10l8.66 5A10 10 0 1 0 12 2z" />
+    </svg>
+  );
+}
+
+function ChartViewToggle({ view, onChange }: { view: 'bar' | 'pie'; onChange: (v: 'bar' | 'pie') => void }) {
+  return (
+    <div className="flex shrink-0 p-0.5 bg-slate-100 rounded-full">
+      <button
+        type="button"
+        aria-label="Bar chart view"
+        aria-pressed={view === 'bar'}
+        onClick={() => onChange('bar')}
+        className={`p-1.5 rounded-full transition-colors ${view === 'bar' ? 'bg-white text-[#1A1A1A] shadow-sm' : 'text-slate-400 hover:text-slate-500'}`}
+      >
+        <BarChartIcon className="w-3.5 h-3.5" />
+      </button>
+      <button
+        type="button"
+        aria-label="Pie chart view"
+        aria-pressed={view === 'pie'}
+        onClick={() => onChange('pie')}
+        className={`p-1.5 rounded-full transition-colors ${view === 'pie' ? 'bg-white text-[#1A1A1A] shadow-sm' : 'text-slate-400 hover:text-slate-500'}`}
+      >
+        <PieChartIcon className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
 type Zone = 'vault' | 'wallet';
 
 export default function MoneyTracker({ history, loading, onRefresh }: MoneyTrackerProps) {
@@ -176,6 +219,8 @@ export default function MoneyTracker({ history, loading, onRefresh }: MoneyTrack
   const [query, setQuery] = useState('');
   const [zone, setZone] = useState<Zone>('wallet');
   const [showBudgets, setShowBudgets] = useState(false);
+  const [vaultChartView, setVaultChartView] = useState<'bar' | 'pie'>('bar');
+  const [walletChartView, setWalletChartView] = useState<'bar' | 'pie'>('bar');
   const { budgets, spentThisMonth } = useBudgets();
   const overBudgetCount = budgets.filter((b) => spentThisMonth(b.category) > b.limit).length;
 
@@ -309,12 +354,20 @@ export default function MoneyTracker({ history, loading, onRefresh }: MoneyTrack
           {zone === 'vault' ? (
             <div className="p-5 rounded-3xl bg-white border border-slate-200/60 shadow-md shadow-slate-900/5 space-y-4">
               <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-[11px] text-slate-400 font-medium">This month, net</p>
-                  <p className={`text-2xl font-bold ${vaultCurrentNet >= 0 ? 'text-[#1A1A1A]' : 'text-red-500'}`}>
-                    {vaultCurrentNet >= 0 ? '+' : ''}
-                    {vaultCurrentNet.toFixed(2)}
-                  </p>
+                <div className="flex items-center gap-3">
+                  <span className="w-9 h-9 rounded-full bg-amber-50 text-[#FF9F1C] flex items-center justify-center shrink-0">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <rect x="3" y="7" width="18" height="13" rx="2" />
+                      <path strokeLinecap="round" d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                  </span>
+                  <div>
+                    <p className="text-[11px] text-slate-400 font-medium">This month, net</p>
+                    <p className={`text-2xl font-bold leading-tight ${vaultCurrentNet >= 0 ? 'text-[#1A1A1A]' : 'text-red-500'}`}>
+                      {vaultCurrentNet >= 0 ? '+' : ''}
+                      {vaultCurrentNet.toFixed(2)}
+                    </p>
+                  </div>
                 </div>
                 <TrendBadge current={vaultCurrentNet} previous={vaultPreviousNet} goodDirection="up" />
               </div>
@@ -325,27 +378,93 @@ export default function MoneyTracker({ history, loading, onRefresh }: MoneyTrack
               </div>
 
               <div>
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
-                  Deposits vs withdrawals
-                </p>
-                <MiniBarChart labels={monthLabels} values={vaultMonthlyNet} color="#10B981" negativeColor="#DC2626" />
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                    Deposits vs withdrawals
+                  </p>
+                  <ChartViewToggle view={vaultChartView} onChange={setVaultChartView} />
+                </div>
+                {vaultChartView === 'bar' ? (
+                  <MiniBarChart labels={monthLabels} values={vaultMonthlyNet} color="#10B981" negativeColor="#DC2626" />
+                ) : (
+                  <div className="flex items-center gap-5 pt-2">
+                    <DonutChart
+                      segments={[
+                        { label: 'Deposits', value: vaultMonthlyNet.filter((v) => v > 0).reduce((s, v) => s + v, 0), color: '#10B981' },
+                        { label: 'Withdrawals', value: vaultMonthlyNet.filter((v) => v < 0).reduce((s, v) => s + Math.abs(v), 0), color: '#DC2626' },
+                      ]}
+                    />
+                    <div className="flex-1 space-y-1.5">
+                      {[
+                        { label: 'Deposits', value: vaultMonthlyNet.filter((v) => v > 0).reduce((s, v) => s + v, 0), color: '#10B981' },
+                        { label: 'Withdrawals', value: vaultMonthlyNet.filter((v) => v < 0).reduce((s, v) => s + Math.abs(v), 0), color: '#DC2626' },
+                      ].map((seg) => (
+                        <div key={seg.label} className="flex items-center justify-between text-[11px]">
+                          <span className="flex items-center gap-1.5 text-slate-500 font-medium">
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
+                            {seg.label}
+                          </span>
+                          <span className="text-slate-700 font-semibold">{seg.value.toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
             <div className="p-5 rounded-3xl bg-white border border-slate-200/60 shadow-md shadow-slate-900/5 space-y-4">
               <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-[11px] text-slate-400 font-medium">Spent this month</p>
-                  <p className="text-2xl font-bold text-[#1A1A1A]">{spendThisMonth.toFixed(2)}</p>
+                <div className="flex items-center gap-3">
+                  <span className="w-9 h-9 rounded-full bg-cyan-50 text-cyan-500 flex items-center justify-center shrink-0">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <rect x="2" y="6" width="20" height="14" rx="3" />
+                      <path strokeLinecap="round" d="M2 10h20" />
+                      <circle cx="17" cy="15" r="1.4" fill="currentColor" />
+                    </svg>
+                  </span>
+                  <div>
+                    <p className="text-[11px] text-slate-400 font-medium">Spent this month</p>
+                    <p className="text-2xl font-bold leading-tight text-[#1A1A1A]">{spendThisMonth.toFixed(2)}</p>
+                  </div>
                 </div>
                 <TrendBadge current={spendThisMonth} previous={spendLastMonth} goodDirection="down" />
               </div>
 
               <div>
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
-                  Spending, last {MONTHS_SHOWN} months
-                </p>
-                <MiniBarChart labels={monthLabels} values={walletMonthlySpend} color="#FF9F1C" />
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                    Spending, last {MONTHS_SHOWN} months
+                  </p>
+                  <ChartViewToggle view={walletChartView} onChange={setWalletChartView} />
+                </div>
+                {walletChartView === 'bar' ? (
+                  <MiniBarChart labels={monthLabels} values={walletMonthlySpend} color="#FF9F1C" />
+                ) : (
+                  <div className="flex items-center gap-5 pt-2">
+                    <DonutChart
+                      segments={monthLabels.map((label, i) => ({
+                        label,
+                        value: walletMonthlySpend[i],
+                        color: MONTH_PALETTE[i % MONTH_PALETTE.length],
+                      }))}
+                    />
+                    <div className="flex-1 space-y-1.5">
+                      {monthLabels.map((label, i) => (
+                        <div key={label} className="flex items-center justify-between text-[11px]">
+                          <span className="flex items-center gap-1.5 text-slate-500 font-medium">
+                            <span
+                              className="w-2 h-2 rounded-full shrink-0"
+                              style={{ backgroundColor: MONTH_PALETTE[i % MONTH_PALETTE.length] }}
+                            />
+                            {label}
+                          </span>
+                          <span className="text-slate-700 font-semibold">{walletMonthlySpend[i].toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="pt-1 border-t border-slate-100">
@@ -406,22 +525,28 @@ export default function MoneyTracker({ history, loading, onRefresh }: MoneyTrack
       )}
 
       {/* Search */}
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search transactions"
-        className="w-full rounded-2xl bg-white border border-slate-200/60 px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-orange-200 placeholder:text-slate-300 shadow-sm"
-      />
+      <div className="relative flex items-center">
+        <svg className="absolute left-4 w-4 h-4 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <circle cx="11" cy="11" r="7" />
+          <path strokeLinecap="round" d="M21 21l-4.35-4.35" />
+        </svg>
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search transactions"
+          className="w-full rounded-full bg-slate-50 border border-slate-100 pl-10 pr-4 py-3 text-xs text-slate-800 outline-none focus:border-orange-200 focus:bg-white placeholder:text-slate-300 transition-colors"
+        />
+      </div>
 
       {/* Category filter chips */}
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" style={{ scrollbarWidth: 'none' }}>
         <button
           onClick={() => setActiveFilter('All')}
-          className={`shrink-0 px-3.5 py-1.5 rounded-full text-[11px] font-semibold border transition-colors ${
+          className={`shrink-0 px-4 py-2 rounded-full text-[12px] font-semibold border transition-colors ${
             activeFilter === 'All'
               ? 'bg-[#1A1A1A] border-[#1A1A1A] text-white'
-              : 'bg-white border-slate-200 text-slate-500'
+              : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
           }`}
         >
           All
@@ -430,12 +555,13 @@ export default function MoneyTracker({ history, loading, onRefresh }: MoneyTrack
           <button
             key={cat}
             onClick={() => setActiveFilter(cat)}
-            className={`shrink-0 px-3.5 py-1.5 rounded-full text-[11px] font-semibold border transition-colors ${
+            className={`shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] font-semibold border transition-colors ${
               activeFilter === cat
-                ? `${CATEGORY_STYLE[cat].bg} ${CATEGORY_STYLE[cat].fg} border-transparent`
-                : 'bg-white border-slate-200 text-slate-500'
+                ? 'bg-white border-slate-800/10 text-slate-800 shadow-sm'
+                : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
             }`}
           >
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CATEGORY_STYLE[cat].bar }} />
             {cat}
           </button>
         ))}
@@ -443,7 +569,7 @@ export default function MoneyTracker({ history, loading, onRefresh }: MoneyTrack
 
       {/* Category totals summary (only for the active filter, to keep it compact) */}
       {activeFilter !== 'All' && (
-        <div className="px-1 text-[11px] text-slate-400">
+        <div className="px-2 text-[11px] text-slate-400">
           <span className={`font-semibold ${CATEGORY_STYLE[activeFilter].fg}`}>{activeFilter}</span>
           {' · '}
           {(totalsByCategory[activeFilter] ?? 0).toFixed(2)} total across {filtered.length} transaction{filtered.length === 1 ? '' : 's'}
@@ -453,52 +579,56 @@ export default function MoneyTracker({ history, loading, onRefresh }: MoneyTrack
       {/* Transaction list */}
       <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
         {filtered.length === 0 ? (
-          <p className="p-6 rounded-3xl bg-white border border-slate-200/60 text-xs font-normal text-slate-400 text-center shadow-md shadow-slate-900/5">
+          <p className="p-6 rounded-3xl bg-white border border-slate-100 text-xs font-normal text-slate-400 text-center shadow-[0_2px_12px_-4px_rgba(15,23,42,0.06)]">
             {history.length === 0 ? 'No transactions recorded yet.' : 'No transactions match this filter.'}
           </p>
         ) : (
           filtered.map(({ entry, category }) => {
             const style = CATEGORY_STYLE[category];
             const isEditing = editingId === entry.id;
+            const isCredit = entry.amount >= 0;
 
             return (
               <div
                 key={entry.id}
-                className="p-5 rounded-3xl bg-white border border-slate-200/60 shadow-md shadow-slate-900/5 space-y-3"
+                className="p-4 rounded-3xl bg-white border border-slate-100 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.06)] space-y-3 transition-shadow hover:shadow-[0_6px_20px_-6px_rgba(15,23,42,0.12)]"
               >
-                <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-full ${style.bg} ${style.fg} flex items-center justify-center shrink-0 font-bold shadow-inner text-xs`}>
+                <div className="flex items-center gap-3.5">
+                  <div className={`w-11 h-11 rounded-full ${style.bg} ${style.fg} flex items-center justify-center shrink-0 font-bold text-sm`}>
                     {category.slice(0, 1)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-semibold text-xs text-slate-800 truncate">{entry.title}</h4>
+                    <h4 className="font-semibold text-[13px] text-slate-800 truncate">{entry.title}</h4>
                     <p className="text-[11px] text-slate-400 truncate mt-0.5 font-normal">{entry.description}</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <span className="text-xs font-semibold text-slate-800">{entry.amount.toFixed(2)}</span>
+                    <span className={`text-[13px] font-bold ${isCredit ? 'text-emerald-600' : 'text-slate-800'}`}>
+                      {isCredit ? '+' : ''}{entry.amount.toFixed(2)}
+                    </span>
                     <p className="text-[10px] text-slate-400 mt-0.5 font-normal">
                       {new Date(entry.timestamp).toLocaleDateString()}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between pl-0.5">
                   <button
                     onClick={() => setEditingId(isEditing ? null : entry.id)}
-                    className={`px-2.5 py-1 rounded-full text-[10px] font-semibold ${style.bg} ${style.fg}`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-semibold ${style.bg} ${style.fg}`}
                   >
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: style.bar }} />
                     {category}
                   </button>
                   <button
                     onClick={() => setEditingId(isEditing ? null : entry.id)}
-                    className="text-[10px] font-semibold text-slate-400 hover:text-slate-600"
+                    className="text-[10px] font-semibold text-cyan-600 hover:text-cyan-700"
                   >
                     {isEditing ? 'Close' : 'Edit category'}
                   </button>
                 </div>
 
                 {isEditing && (
-                  <div className="flex flex-wrap gap-1.5 pt-1 border-t border-slate-100">
+                  <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100">
                     {CATEGORIES.map((cat) => (
                       <button
                         key={cat}
@@ -509,7 +639,7 @@ export default function MoneyTracker({ history, loading, onRefresh }: MoneyTrack
                         className={`mt-2 px-2.5 py-1 rounded-full text-[10px] font-semibold border transition-colors ${
                           cat === category
                             ? `${CATEGORY_STYLE[cat].bg} ${CATEGORY_STYLE[cat].fg} border-transparent`
-                            : 'bg-white border-slate-200 text-slate-500'
+                            : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
                         }`}
                       >
                         {cat}
